@@ -3,7 +3,11 @@ package com.oficina.functions.bootstrap;
 import com.oficina.functions.adapter.aws.DynamoDesafioStore;
 import com.oficina.functions.adapter.aws.SesEnviarCodigo;
 import com.oficina.functions.adapter.jdbc.JdbcClienteLookup;
+import com.oficina.functions.adapter.jdbc.JdbcDestinatarioLookup;
+import com.oficina.functions.adapter.aws.DynamoDeliveryLedger;
+import com.oficina.functions.adapter.aws.SesStatusEmailSender;
 import com.oficina.functions.auth.*;
+import com.oficina.functions.notification.NotificarStatus;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.core.retry.RetryPolicy;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
@@ -92,6 +96,23 @@ public final class FunctionFactory {
             return new Authorizer(customer, staff, new RoutePolicy());
         } catch (RuntimeException exception) {
             throw new IllegalStateException("Authorizer function configuration unavailable");
+        }
+    }
+
+    /** Composition for the FIFO notification worker. It owns only its read model, ledger and SES transport. */
+    public static NotificarStatus notificationFromEnvironment() {
+        try {
+            Map<String, String> environment = System.getenv();
+            ConnectionProvider provider = new ConnectionProvider(new ConnectionProvider.Config(required(environment, "DB_HOST"), integer(environment, "DB_PORT"),
+                    required(environment, "DB_NAME"), required(environment, "DB_USER"), required(environment, "DB_PASSWORD"), Path.of(required(environment, "DB_CA_PATH")).toAbsolutePath()));
+            ClientOverrideConfiguration sdk = ClientOverrideConfiguration.builder().retryPolicy(RetryPolicy.builder().numRetries(2).build()).build();
+            DynamoDbClient dynamo = DynamoDbClient.builder().httpClientBuilder(UrlConnectionHttpClient.builder()).overrideConfiguration(sdk).build();
+            SesV2Client ses = SesV2Client.builder().httpClientBuilder(UrlConnectionHttpClient.builder()).overrideConfiguration(sdk).build();
+            StructuredLog.coldStart("status-notification");
+            return new NotificarStatus(new JdbcDestinatarioLookup(provider), new DynamoDeliveryLedger(dynamo, required(environment, "DELIVERY_TABLE")),
+                    new SesStatusEmailSender(ses, required(environment, "STATUS_SENDER")), Clock.systemUTC());
+        } catch (RuntimeException exception) {
+            throw new IllegalStateException("Notification function configuration unavailable");
         }
     }
 
