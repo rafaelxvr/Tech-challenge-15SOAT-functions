@@ -65,9 +65,12 @@ class DynamoDeliveryLedgerTest {
         new NotificarStatus(id -> Optional.of(recipient), ledger, sender, Clock.fixed(now, ZoneOffset.UTC)).executar(stale, order.toString());
         verifyNoInteractions(sender); verify(dynamo, never()).transactWriteItems(any(TransactWriteItemsRequest.class));
         ArgumentCaptor<UpdateItemRequest> updates = ArgumentCaptor.forClass(UpdateItemRequest.class); verify(dynamo, times(2)).updateItem(updates.capture());
+        assertThat(updates.getAllValues()).allSatisfy(update -> assertThat(update.key().get("PK").s()).isEqualTo("delivery#" + event));
+        UpdateItemRequest claim = updates.getAllValues().get(0);
         UpdateItemRequest terminal = updates.getAllValues().get(1);
         assertThat(terminal.conditionExpression()).contains("owner", "outcome");
         assertThat(terminal.expressionAttributeValues()).containsKeys(":owner", ":outcome");
+        assertThat(terminal.expressionAttributeValues().get(":owner")).isEqualTo(claim.expressionAttributeValues().get(":owner"));
         assertThat(terminal.expressionAttributeValues().get(":outcome").s()).isEqualTo("SUPERSEDED");
     }
     private static AttributeValue s(String value) { return AttributeValue.builder().s(value).build(); } private static AttributeValue n(long value) { return AttributeValue.builder().n(Long.toString(value)).build(); }
