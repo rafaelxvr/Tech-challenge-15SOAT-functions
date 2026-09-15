@@ -1,0 +1,9 @@
+{
+  "version": "2.0",
+  "routeKey": "POST /api/autenticacao/desafios/verificacoes",
+  "rawPath": "/api/autenticacao/desafios/verificacoes",
+  "headers": {"content-type": "application/json", "x-correlation-id": "fixture-456"},
+  "requestContext": {"http": {"method": "POST", "path": "/api/autenticacao/desafios/verificacoes", "sourceIp": "203.0.113.10"}},
+  "body": "{\"desafioId\":\"11111111-1111-1111-1111-111111111111\",\"codigo\":\"123456\"}",
+  "isBase64Encoded": false
+}
