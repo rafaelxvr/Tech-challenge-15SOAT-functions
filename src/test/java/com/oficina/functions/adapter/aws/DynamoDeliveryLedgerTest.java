@@ -1,11 +1,14 @@
 package com.oficina.functions.adapter.aws;
 
 import com.oficina.functions.notification.ClaimResult;
+import com.oficina.functions.notification.Destinatario;
+import com.oficina.functions.notification.NotificarStatus;
+import com.oficina.functions.notification.StatusOrdemServicoRegistrado;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
-import java.time.Instant; import java.util.*;
+import java.time.Clock; import java.time.Instant; import java.time.ZoneOffset; import java.util.*;
 import static org.assertj.core.api.Assertions.*; import static org.mockito.Mockito.*;
 
 class DynamoDeliveryLedgerTest {
@@ -47,6 +50,25 @@ class DynamoDeliveryLedgerTest {
         doThrow(TransactionCanceledException.builder().message("cursor condition failed").build()).when(dynamo).transactWriteItems(any(TransactWriteItemsRequest.class));
         new DynamoDeliveryLedger(dynamo, "delivery").complete(event, order, 7, owner, "SES_ACCEPTED", "ses-1", now);
         verify(dynamo).transactWriteItems(any(TransactWriteItemsRequest.class)); verify(dynamo).updateItem(any(UpdateItemRequest.class));
+    }
+    @Test void oldDlqReplayAcknowledgesThroughUseCaseWithoutSesOrCursorWrite() {
+        DynamoDbClient dynamo = mock(DynamoDbClient.class);
+        when(dynamo.getItem(any(GetItemRequest.class))).thenAnswer(call -> {
+            String pk = call.getArgument(0, GetItemRequest.class).key().get("PK").s();
+            return GetItemResponse.builder().item(pk.startsWith("cursor#") ? Map.of("sequence", n(9)) : Map.of("leaseUntil", n(0))).build();
+        });
+        DynamoDeliveryLedger ledger = new DynamoDeliveryLedger(dynamo, "delivery");
+        Destinatario recipient = new Destinatario(order, 1001, UUID.randomUUID(), true, "customer@example.test", 1);
+        StatusOrdemServicoRegistrado stale = new StatusOrdemServicoRegistrado(event, "StatusOrdemServicoRegistrado", 1, order, 1001,
+                recipient.clienteId(), 1, 2, null, "RECEBIDA", now, UUID.randomUUID(), null);
+        var sender = mock(com.oficina.functions.notification.StatusEmailSender.class);
+        new NotificarStatus(id -> Optional.of(recipient), ledger, sender, Clock.fixed(now, ZoneOffset.UTC)).executar(stale, order.toString());
+        verifyNoInteractions(sender); verify(dynamo, never()).transactWriteItems(any(TransactWriteItemsRequest.class));
+        ArgumentCaptor<UpdateItemRequest> updates = ArgumentCaptor.forClass(UpdateItemRequest.class); verify(dynamo, times(2)).updateItem(updates.capture());
+        UpdateItemRequest terminal = updates.getAllValues().get(1);
+        assertThat(terminal.conditionExpression()).contains("owner", "outcome");
+        assertThat(terminal.expressionAttributeValues()).containsKeys(":owner", ":outcome");
+        assertThat(terminal.expressionAttributeValues().get(":outcome").s()).isEqualTo("SUPERSEDED");
     }
     private static AttributeValue s(String value) { return AttributeValue.builder().s(value).build(); } private static AttributeValue n(long value) { return AttributeValue.builder().n(Long.toString(value)).build(); }
 }
