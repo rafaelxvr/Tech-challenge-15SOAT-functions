@@ -10,8 +10,22 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LambdaHandlerAdapterTest {
+
+    @Test
+    void adaptersExposeAwsConstructibleNoArgumentBoundary() throws Exception {
+        HttpHandlerAdapter http = HttpHandlerAdapter.class.getConstructor().newInstance();
+        SqsHandlerAdapter sqs = SqsHandlerAdapter.class.getConstructor().newInstance();
+
+        assertThatThrownBy(() -> http.handleRequest(new APIGatewayV2HTTPEvent(), null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("F1/F4/F5 composition");
+        assertThatThrownBy(() -> sqs.handleRequest(new SQSEvent(), null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("F1/F4/F5 composition");
+    }
 
     @Test
     void httpAdapterDelegatesAwsEventToPlainOperation() {

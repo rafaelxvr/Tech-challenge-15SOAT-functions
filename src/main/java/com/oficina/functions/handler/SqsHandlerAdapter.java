@@ -11,6 +11,10 @@ public final class SqsHandlerAdapter implements RequestHandler<SQSEvent, SQSBatc
 
     private final SqsHandlerOperation operation;
 
+    public SqsHandlerAdapter() {
+        this(SqsHandlerAdapter::unconfigured);
+    }
+
     public SqsHandlerAdapter(SqsHandlerOperation operation) {
         this.operation = Objects.requireNonNull(operation, "operation");
     }
@@ -18,5 +22,9 @@ public final class SqsHandlerAdapter implements RequestHandler<SQSEvent, SQSBatc
     @Override
     public SQSBatchResponse handleRequest(SQSEvent event, Context context) {
         return operation.handle(event, context);
+    }
+
+    private static SQSBatchResponse unconfigured(SQSEvent event, Context context) {
+        throw new IllegalStateException("SQS handler requires F1/F4/F5 composition");
     }
 }

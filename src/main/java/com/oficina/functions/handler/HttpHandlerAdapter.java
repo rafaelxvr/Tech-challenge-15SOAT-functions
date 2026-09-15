@@ -12,6 +12,10 @@ public final class HttpHandlerAdapter
 
     private final HttpHandlerOperation operation;
 
+    public HttpHandlerAdapter() {
+        this(HttpHandlerAdapter::unconfigured);
+    }
+
     public HttpHandlerAdapter(HttpHandlerOperation operation) {
         this.operation = Objects.requireNonNull(operation, "operation");
     }
@@ -19,5 +23,9 @@ public final class HttpHandlerAdapter
     @Override
     public APIGatewayV2HTTPResponse handleRequest(APIGatewayV2HTTPEvent event, Context context) {
         return operation.handle(event, context);
+    }
+
+    private static APIGatewayV2HTTPResponse unconfigured(APIGatewayV2HTTPEvent event, Context context) {
+        throw new IllegalStateException("HTTP handler requires F1/F4/F5 composition");
     }
 }
