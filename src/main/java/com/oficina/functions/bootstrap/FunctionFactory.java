@@ -25,6 +25,7 @@ import java.time.Clock;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Objects;
+import java.nio.charset.StandardCharsets;
 
 /** Plain Lambda composition root.  It deliberately has no Spring, Hibernate or JPA dependency. */
 public final class FunctionFactory {
@@ -68,8 +69,8 @@ public final class FunctionFactory {
             DesafioStore store = new DynamoDesafioStore(dynamo, required(environment, "CHALLENGE_TABLE"), hasher, clock);
             EnviarCodigo email = new SesEnviarCodigo(ses, required(environment, "OTP_SENDER"));
             PrivateKey privateKey = privateKey(required(environment, "CUSTOMER_PRIVATE_KEY_B64"));
-            String issuer = required(environment, "JWT_ISSUER"), audience = required(environment, "JWT_AUDIENCE"), kid = required(environment, "CUSTOMER_KEY_ID");
-            TokenSigner signer = new RsaTokenSigner(privateKey, kid, issuer, audience);
+            JwtTrust customerTrust = trust(environment, "CUSTOMER", "customer");
+            TokenSigner signer = new RsaTokenSigner(privateKey, required(environment, "CUSTOMER_KEY_ID"), customerTrust.issuer(), customerTrust.audience());
             CriarDesafio criar = new CriarDesafio(lookup, store, email, new SecureCodigoGenerator(), hasher, clock);
             VerificarDesafio verificar = new VerificarDesafio(lookup, store, signer, clock);
             StructuredLog.coldStart("auth-functions");
@@ -87,11 +88,14 @@ public final class FunctionFactory {
     static Authorizer authorizerFrom(Map<String, String> environment) {
         try {
             Clock clock = Clock.systemUTC();
-            String issuer = required(environment, "JWT_ISSUER"), audience = required(environment, "JWT_AUDIENCE"), kid = required(environment, "CUSTOMER_KEY_ID");
+            JwtTrust customerTrust = trust(environment, "CUSTOMER", "customer");
+            JwtTrust staffTrust = trust(environment, "STAFF", "staff");
+            if (!customerTrust.environment().equals(staffTrust.environment())) throw new IllegalArgumentException();
+            String kid = required(environment, "CUSTOMER_KEY_ID");
             PublicKey publicKey = publicKey(required(environment, "CUSTOMER_PUBLIC_KEY_B64"));
-            CustomerTokenVerifier customer = new CustomerTokenVerifier(Map.of(kid, publicKey), issuer, audience, clock);
-            byte[] secret = Base64.getDecoder().decode(required(environment, "STAFF_HMAC_SECRET_B64"));
-            StaffTokenVerifier staff = new StaffTokenVerifier(Map.of(required(environment, "STAFF_KEY_ID"), new SecretKeySpec(secret, "HmacSHA256")), issuer, audience, clock);
+            CustomerTokenVerifier customer = new CustomerTokenVerifier(Map.of(kid, publicKey), customerTrust.issuer(), customerTrust.audience(), clock);
+            byte[] secret = required(environment, "STAFF_HMAC_SECRET").getBytes(StandardCharsets.UTF_8);
+            StaffTokenVerifier staff = new StaffTokenVerifier(Map.of(required(environment, "STAFF_KEY_ID"), new SecretKeySpec(secret, "HmacSHA256")), staffTrust.issuer(), staffTrust.audience(), clock);
             StructuredLog.coldStart("http-authorizer");
             return new Authorizer(customer, staff, new RoutePolicy());
         } catch (RuntimeException exception) {
@@ -118,6 +122,19 @@ public final class FunctionFactory {
 
     private static String required(Map<String, String> environment, String name) { String value = environment.get(name); if (value == null || value.isBlank()) throw new IllegalArgumentException(); return value; }
     private static int integer(Map<String, String> environment, String name) { try { return Integer.parseInt(required(environment, name)); } catch (NumberFormatException e) { throw new IllegalArgumentException(); } }
+    private static JwtTrust trust(Map<String, String> environment, String prefix, String domain) {
+        String issuer = required(environment, prefix + "_JWT_ISSUER");
+        String audience = required(environment, prefix + "_JWT_AUDIENCE");
+        String marker = "oficina-";
+        if (!issuer.startsWith(marker) || !issuer.endsWith("-" + domain) || !audience.startsWith(marker) || !audience.endsWith("-api"))
+            throw new IllegalArgumentException();
+        String issuerEnvironment = issuer.substring(marker.length(), issuer.length() - domain.length() - 1);
+        String audienceEnvironment = audience.substring(marker.length(), audience.length() - "-api".length());
+        if (!issuerEnvironment.equals(audienceEnvironment) || !(issuerEnvironment.equals("staging") || issuerEnvironment.equals("production")))
+            throw new IllegalArgumentException();
+        return new JwtTrust(issuer, audience, issuerEnvironment);
+    }
+    private record JwtTrust(String issuer, String audience, String environment) { }
     private static PrivateKey privateKey(String base64) { try { return KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(Base64.getDecoder().decode(base64))); } catch (Exception e) { throw new IllegalArgumentException(); } }
     private static PublicKey publicKey(String base64) { try { return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(base64))); } catch (Exception e) { throw new IllegalArgumentException(); } }
 }

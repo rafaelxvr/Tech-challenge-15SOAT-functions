@@ -29,6 +29,18 @@ every operation. Raw tokens, subjects, claims and parser errors must not be logg
 
 ## Contract adoption
 
+## Lambda environment configuration
+
+The authentication functions use `CUSTOMER_JWT_ISSUER` and `CUSTOMER_JWT_AUDIENCE`.
+The gateway authorizer separately uses those two variables plus `STAFF_JWT_ISSUER`
+and `STAFF_JWT_AUDIENCE`; each pair is validated as a canonical matching environment:
+`oficina-staging-customer` / `oficina-staging-staff` / `oficina-staging-api`, or the
+same `production` names. It receives `STAFF_HMAC_SECRET` as the same raw text secret
+configured by APP and converts it once with UTF-8. `STAFF_HMAC_SECRET_B64` is not a
+supported setting. Authentication handlers receive `CUSTOMER_PRIVATE_KEY_B64`; the
+authorizer receives only `CUSTOMER_PUBLIC_KEY_B64` and never the private key, database,
+DynamoDB or SES settings.
+
 `contracts/phase3-v1` is immutable. F3 vendors APP's A7 `contracts/phase3-v2`
 byte-for-byte and records a FUN SHA-256 manifest. Only v2 `routes.json` is packaged
 as a classpath resource. The loader matches exact API Gateway route keys, uses
