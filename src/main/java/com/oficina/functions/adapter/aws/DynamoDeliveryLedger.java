@@ -51,6 +51,11 @@ public final class DynamoDeliveryLedger implements DeliveryLedger {
     }
     @Override public void complete(UUID eventId, UUID ordemId, long sequence, UUID owner, String outcome, String messageId, Instant now) {
         if (outcome == null || outcome.isBlank()) throw new IllegalArgumentException("Outcome required");
+        // A stale DLQ replay must become terminal without trying to lower the newer order cursor.
+        if ("SUPERSEDED".equals(outcome)) {
+            terminalizeWithoutCursor(eventId, owner, sequence, outcome, messageId, now);
+            return;
+        }
         Map<String, AttributeValue> values = new java.util.HashMap<>();
         values.put(":owner", s(owner.toString())); values.put(":outcome", s(outcome)); values.put(":sequence", n(sequence));
         values.put(":ttl", n(now.getEpochSecond() + RETENTION_SECONDS));
@@ -66,8 +71,35 @@ public final class DynamoDeliveryLedger implements DeliveryLedger {
                 .updateExpression("SET #sequence = :sequence, #ttl = :ttl")
                 .expressionAttributeNames(Map.of("#sequence", "sequence", "#ttl", "ttl"))
                 .expressionAttributeValues(Map.of(":sequence", n(sequence), ":ttl", n(now.getEpochSecond() + RETENTION_SECONDS))).build();
-        dynamo.transactWriteItems(TransactWriteItemsRequest.builder().transactItems(
-                TransactWriteItem.builder().update(eventUpdate).build(), TransactWriteItem.builder().update(cursorUpdate).build()).build());
+        try {
+            dynamo.transactWriteItems(TransactWriteItemsRequest.builder().transactItems(
+                    TransactWriteItem.builder().update(eventUpdate).build(), TransactWriteItem.builder().update(cursorUpdate).build()).build());
+        } catch (TransactionCanceledException contention) {
+            // A concurrent later event can legitimately win the cursor. Preserve this terminal result but never lower it.
+            if (completedSequence(ordemId) >= sequence) {
+                terminalizeWithoutCursor(eventId, owner, sequence, outcome, messageId, now);
+                return;
+            }
+            throw contention;
+        }
+    }
+    private void terminalizeWithoutCursor(UUID eventId, UUID owner, long sequence, String outcome, String messageId, Instant now) {
+        Map<String, AttributeValue> values = new java.util.HashMap<>();
+        values.put(":owner", s(owner.toString())); values.put(":outcome", s(outcome)); values.put(":sequence", n(sequence));
+        values.put(":completedAt", n(now.toEpochMilli())); values.put(":ttl", n(now.getEpochSecond() + RETENTION_SECONDS));
+        if (messageId != null) values.put(":messageId", s(messageId));
+        String update = "SET outcome = :outcome, sequence = :sequence, completedAt = :completedAt, #ttl = :ttl" +
+                (messageId == null ? " REMOVE owner, leaseUntil" : ", messageId = :messageId REMOVE owner, leaseUntil");
+        try {
+            dynamo.updateItem(UpdateItemRequest.builder().tableName(table).key(key(event(eventId)))
+                    .conditionExpression("owner = :owner AND attribute_not_exists(outcome)").updateExpression(update)
+                    .expressionAttributeNames(Map.of("#ttl", "ttl")).expressionAttributeValues(values).build());
+        } catch (ConditionalCheckFailedException lostClaim) {
+            Map<String, AttributeValue> current = dynamo.getItem(GetItemRequest.builder().tableName(table)
+                    .key(key(event(eventId))).consistentRead(true).build()).item();
+            if (current.containsKey("outcome")) return;
+            throw lostClaim;
+        }
     }
     private static String event(UUID id) { return "delivery#" + id; }
     private static String cursor(UUID id) { return "cursor#" + id; }

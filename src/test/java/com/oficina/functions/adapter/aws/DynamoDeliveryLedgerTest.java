@@ -33,5 +33,20 @@ class DynamoDeliveryLedgerTest {
         DynamoDbClient dynamo = mock(DynamoDbClient.class); when(dynamo.getItem(any(GetItemRequest.class))).thenReturn(GetItemResponse.builder().item(Map.of("sequence", n(3))).build());
         assertThat(new DynamoDeliveryLedger(dynamo, "delivery").completedSequence(order)).isEqualTo(3); ArgumentCaptor<GetItemRequest> request = ArgumentCaptor.forClass(GetItemRequest.class); verify(dynamo).getItem(request.capture()); assertThat(request.getValue().consistentRead()).isTrue();
     }
+    @Test void terminalizesOldDlqReplayWithoutReplacingNewerCursor() {
+        DynamoDbClient dynamo = mock(DynamoDbClient.class); DynamoDeliveryLedger ledger = new DynamoDeliveryLedger(dynamo, "delivery");
+        ledger.complete(event, order, 2, owner, "SUPERSEDED", null, now);
+        ArgumentCaptor<UpdateItemRequest> eventTerminalization = ArgumentCaptor.forClass(UpdateItemRequest.class); verify(dynamo).updateItem(eventTerminalization.capture());
+        assertThat(eventTerminalization.getValue().key().get("PK").s()).startsWith("delivery#");
+        assertThat(eventTerminalization.getValue().conditionExpression()).contains("owner", "outcome");
+        verify(dynamo, never()).transactWriteItems(any(TransactWriteItemsRequest.class));
+    }
+    @Test void resolvesActualCursorConditionRaceByTerminalizingWithoutCursor() {
+        DynamoDbClient dynamo = mock(DynamoDbClient.class);
+        when(dynamo.getItem(any(GetItemRequest.class))).thenReturn(GetItemResponse.builder().item(Map.of("sequence", n(9))).build());
+        doThrow(TransactionCanceledException.builder().message("cursor condition failed").build()).when(dynamo).transactWriteItems(any(TransactWriteItemsRequest.class));
+        new DynamoDeliveryLedger(dynamo, "delivery").complete(event, order, 7, owner, "SES_ACCEPTED", "ses-1", now);
+        verify(dynamo).transactWriteItems(any(TransactWriteItemsRequest.class)); verify(dynamo).updateItem(any(UpdateItemRequest.class));
+    }
     private static AttributeValue s(String value) { return AttributeValue.builder().s(value).build(); } private static AttributeValue n(long value) { return AttributeValue.builder().n(Long.toString(value)).build(); }
 }
