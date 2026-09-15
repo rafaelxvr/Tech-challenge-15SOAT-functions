@@ -67,7 +67,7 @@ FUN. APP must already have compiled A3 classes and its existing
 classpath; the script never builds or modifies APP.
 
 ```powershell
-.\scripts\verify-app-token-interop.ps1 -AppRoot 'D:/repository/Tech-challenge-15SOAT/.worktrees/phase-3-implementation' -JavaHome 'C:/Program Files/Eclipse Adoptium/jdk-17.0.20.101-hotspot'
+.\scripts\verify-app-token-interop.ps1 -AppRoot 'D:/repository/Tech-challenge-15SOAT/.worktrees/phase-3-implementation' -JavaHome 'C:/Program Files/Eclipse Adoptium/jdk-17.0.20.101-hotspot' -ReceiptPath docs/evidence/app-token-interop-receipt.json
 ```
 
 Each run generates new RSA keys in memory, signs through FUN, verifies the result
@@ -80,3 +80,13 @@ compiled harness and that run's public-only fixture. Private keys are never save
 These build outputs are ignored by Git; the harness and invocation script remain
 committed for review and future runs. APP HEAD is context; loaded-class hashes
 identify the exact bytecode actually tested even when APP classes predate HEAD.
+
+The committed `docs/evidence/app-token-interop-receipt.json` is a regeneration
+receipt from a successful Windows PowerShell 5.1 run with ErrorActionPreference
+set to Stop. It contains only allowlisted technical provenance and PASS assertions,
+including actual APP class origins/hashes and dependency jar names. No raw local
+paths, keys, token values, subjects or user data enter the receipt. `-ReceiptPath`
+regenerates it after a successful run; omitted, only local build evidence is saved.
+Java/compiler stderr is captured through .NET process streams so normal version
+output and JVM warnings cannot become PowerShell 5.1 terminating errors. Java 17
+remains enforced before compilation and again inside the Java harness.
