@@ -9,7 +9,7 @@ import java.util.Map;
 /** HTTP API simple-response authorizer: invalid credentials are 401, denied grants are 403. */
 public final class AuthorizerHandler implements RequestHandler<Map<String, Object>, Map<String, Object>> {
     private final Authorizer authorizer;
-    public AuthorizerHandler() { this(FunctionFactoryHolder.factory().authorizer()); }
+    public AuthorizerHandler() { this(AuthorizerFactoryHolder.authorizer()); }
     public AuthorizerHandler(Authorizer authorizer) { this.authorizer = authorizer; }
 
     @Override public Map<String, Object> handleRequest(Map<String, Object> event, Context context) {
