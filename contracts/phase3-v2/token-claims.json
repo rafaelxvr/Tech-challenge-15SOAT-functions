@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "algorithms": {
+    "customer": "RS256",
+    "staff": "HS256"
+  },
+  "environments": {
+    "staging": {
+      "customerAccess": {
+        "iss": "oficina-staging-customer",
+        "aud": "oficina-staging-api",
+        "sub": "00000000-0000-4000-8000-000000000301",
+        "principal_type": "customer",
+        "token_use": "access",
+        "identity_version": 1,
+        "iat": 1789473600,
+        "exp": 1789474500,
+        "scopes": [
+          "orders:read:self",
+          "orders:decide:self"
+        ]
+      },
+      "staffAccess": {
+        "iss": "oficina-staging-staff",
+        "aud": "oficina-staging-api",
+        "sub": "staff.fixture@example.invalid",
+        "principal_type": "staff",
+        "token_use": "access",
+        "iat": 1789473600,
+        "exp": 1789560000,
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "staffRefresh": {
+        "iss": "oficina-staging-staff",
+        "aud": "oficina-staging-api",
+        "sub": "staff.fixture@example.invalid",
+        "principal_type": "staff",
+        "token_use": "refresh",
+        "iat": 1789473600,
+        "exp": 1790078400,
+        "roles": [
+          "ADMIN"
+        ]
+      }
+    },
+    "production": {
+      "customerAccess": {
+        "iss": "oficina-production-customer",
+        "aud": "oficina-production-api",
+        "sub": "00000000-0000-4000-8000-000000000301",
+        "principal_type": "customer",
+        "token_use": "access",
+        "identity_version": 1,
+        "iat": 1789473600,
+        "exp": 1789474500,
+        "scopes": [
+          "orders:read:self",
+          "orders:decide:self"
+        ]
+      },
+      "staffAccess": {
+        "iss": "oficina-production-staff",
+        "aud": "oficina-production-api",
+        "sub": "staff.fixture@example.invalid",
+        "principal_type": "staff",
+        "token_use": "access",
+        "iat": 1789473600,
+        "exp": 1789560000,
+        "roles": [
+          "ADMIN"
+        ]
+      },
+      "staffRefresh": {
+        "iss": "oficina-production-staff",
+        "aud": "oficina-production-api",
+        "sub": "staff.fixture@example.invalid",
+        "principal_type": "staff",
+        "token_use": "refresh",
+        "iat": 1789473600,
+        "exp": 1790078400,
+        "roles": [
+          "ADMIN"
+        ]
+      }
+    }
+  }
+}

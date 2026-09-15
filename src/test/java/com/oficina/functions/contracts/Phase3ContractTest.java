@@ -25,6 +25,31 @@ class Phase3ContractTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test
+    void versionTwoPreservesEveryV1PolicyAndAddsOnlyAdminReports() throws Exception {
+        Path v2 = Path.of("contracts/phase3-v2");
+        JsonNode old = MAPPER.readTree(CONTRACTS.resolve("routes.json").toFile());
+        JsonNode current = MAPPER.readTree(v2.resolve("routes.json").toFile());
+        assertThat(current.path("routes")).hasSize(38);
+        assertThat(current.path("defaultDecision").asText()).isEqualTo("DENY");
+        for (JsonNode route : old.path("routes")) {
+            assertThat(findRoute(current, route.path("method").asText() + " " + route.path("path").asText())).isEqualTo(route);
+        }
+        assertGrant(current, "GET /api/admin/relatorios/ordens", "staff", Set.of("ADMIN"), Set.of());
+        for (String unchanged : List.of("token-claims.json", "status-event.json", "lookup-views.md")) {
+            assertThat(Files.readAllBytes(v2.resolve(unchanged))).isEqualTo(Files.readAllBytes(CONTRACTS.resolve(unchanged)));
+        }
+        for (String line : Files.readAllLines(v2.resolve("SHA256SUMS"))) {
+            if (line.isBlank()) continue;
+            String[] parts = line.split("  ", 2);
+            assertThat(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(v2.resolve(parts[1]))))).isEqualTo(parts[0]);
+        }
+        try (var stream = getClass().getResourceAsStream("/contracts/phase3-v2/routes.json")) {
+            assertThat(stream).isNotNull();
+            assertThat(stream.readAllBytes()).isEqualTo(Files.readAllBytes(v2.resolve("routes.json")));
+        }
+    }
+
+    @Test
     void eventContainsExactReferencesWithoutContactOrSecurityData() throws Exception {
         Path fixture = CONTRACTS.resolve("status-event.json");
         JsonNode event = MAPPER.readTree(fixture.toFile());
