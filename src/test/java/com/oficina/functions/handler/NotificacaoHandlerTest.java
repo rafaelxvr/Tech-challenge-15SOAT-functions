@@ -10,18 +10,20 @@ import com.oficina.functions.observability.TraceContextAdapter;
 import static org.assertj.core.api.Assertions.*;
 
 class NotificacaoHandlerTest {
+    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2026-09-15T12:05:00Z"), ZoneOffset.UTC);
+
     @Test void acceptsExactlyOneValidFifoRecord() {
-        NotificarStatus notification = new NotificarStatus(id -> Optional.empty(), new TerminalLedger(), (d,e) -> "unused", Clock.systemUTC());
+        NotificarStatus notification = new NotificarStatus(id -> Optional.empty(), new TerminalLedger(), (d,e) -> "unused", TEST_CLOCK);
         NotificacaoHandler handler = new NotificacaoHandler(notification); SQSEvent event = sqs(validBody());
         assertThat(handler.handleRequest(event, null)).isNull();
     }
     @Test void rejectsMalformedOrBatchRecordsSoLambdaRetries() {
-        NotificacaoHandler handler = new NotificacaoHandler(new NotificarStatus(id -> Optional.empty(), new TerminalLedger(), (d,e) -> "unused", Clock.systemUTC()));
+        NotificacaoHandler handler = new NotificacaoHandler(new NotificarStatus(id -> Optional.empty(), new TerminalLedger(), (d,e) -> "unused", TEST_CLOCK));
         assertThatThrownBy(() -> handler.handleRequest(sqs("{}"), null)).isInstanceOf(IllegalArgumentException.class);
         SQSEvent batch = sqs(validBody()); batch.getRecords().add(new SQSEvent.SQSMessage()); assertThatThrownBy(() -> handler.handleRequest(batch, null)).isInstanceOf(IllegalArgumentException.class);
     }
     @Test void post_parse_failure_keeps_safe_event_context_in_log_then_clears_reused_invocation_state() throws Exception {
-        NotificarStatus failing = new NotificarStatus(id -> { throw new IllegalStateException("private@example.test Bearer secret"); }, new AcquiredLedger(), (d,e) -> "unused", Clock.systemUTC());
+        NotificarStatus failing = new NotificarStatus(id -> { throw new IllegalStateException("private@example.test Bearer secret"); }, new AcquiredLedger(), (d,e) -> "unused", TEST_CLOCK);
         String body = validBody().replace("\"traceparent\":null", "\"traceparent\":\"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01\"");
         PrintStream original = System.out; var captured = new ByteArrayOutputStream();
         try {
