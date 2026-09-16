@@ -1,0 +1,1 @@
+{"schemaVersion":1,"repository":"FUN","status":"NOT_RUN","planReference":"NOT_CAPTURED","outputReference":"infra/modules/functions/outputs.tf","runEvidence":"NOT_AVAILABLE","externalPrerequisites":["approved cloud window","reviewed Lambda/queue plan","SES recipient confirmation","SNS/New Relic enrollment"]}
