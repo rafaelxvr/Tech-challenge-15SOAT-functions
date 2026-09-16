@@ -30,8 +30,17 @@ public final class NotificacaoHandler implements RequestHandler<SQSEvent, Void> 
             JsonNode node = JSON.readTree(message.getBody());
             StatusOrdemServicoRegistrado parsed = event(node);
             try (var trace = TraceContextAdapter.extract(parsed.traceparent())) {
-                notificacao.executar(parsed, message.getAttributes() == null ? null : message.getAttributes().get("MessageGroupId"));
-                JsonLogger.event("notification_completed", parsed.correlationId().toString(), TraceContextAdapter.current(), "ses_accepted_or_suppressed");
+                String correlation = parsed.correlationId().toString();
+                try {
+                    notificacao.executar(parsed, message.getAttributes() == null ? null : message.getAttributes().get("MessageGroupId"));
+                    JsonLogger.event("notification_completed", correlation, TraceContextAdapter.current(), "ses_accepted_or_suppressed");
+                } catch (IllegalArgumentException exception) {
+                    JsonLogger.event("notification_failed", correlation, TraceContextAdapter.current(), "invalid_event");
+                    throw exception;
+                } catch (Exception exception) {
+                    JsonLogger.event("notification_failed", correlation, TraceContextAdapter.current(), "processing_failure");
+                    throw new IllegalStateException("Notification processing failed");
+                }
             }
             return null;
         } catch (IllegalArgumentException exception) { JsonLogger.event("notification_failed", null, null, "invalid_event"); throw exception; }
