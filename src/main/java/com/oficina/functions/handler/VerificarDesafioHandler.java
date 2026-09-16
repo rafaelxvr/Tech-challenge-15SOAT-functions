@@ -16,7 +16,7 @@ public final class VerificarDesafioHandler implements RequestHandler<APIGatewayV
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Set<String> FIELDS = Set.of("desafioId", "codigo");
     private final VerificarDesafio verificar;
-    public VerificarDesafioHandler() { this(FunctionFactoryHolder.factory().verificarDesafio()); }
+    public VerificarDesafioHandler() { this(VerificationFactoryHolder.verification()); }
     public VerificarDesafioHandler(VerificarDesafio verificar) { this.verificar = verificar; }
 
     @Override public APIGatewayV2HTTPResponse handleRequest(APIGatewayV2HTTPEvent event, Context context) {

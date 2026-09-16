@@ -50,10 +50,48 @@ public final class FunctionFactory {
     /** Composition for the two OTP endpoints only. It owns the private key and delivery dependencies. */
     public static FunctionFactory authenticationFromEnvironment() {
         try {
-            return authenticationFrom(System.getenv());
+            return authenticationFrom(resolvedEnvironment(System.getenv()));
         } catch (RuntimeException exception) {
             throw new IllegalStateException("Authentication function configuration unavailable");
         }
+    }
+
+    /** Challenge creation has no signing capability and never resolves the customer private-key secret. */
+    public static CriarDesafio challengeFromEnvironment() {
+        try { return challengeFrom(resolvedEnvironment(without(System.getenv(), "CUSTOMER_SIGNING_SECRET_ARN"))); }
+        catch (RuntimeException exception) { throw new IllegalStateException("Challenge function configuration unavailable"); }
+    }
+    static CriarDesafio challengeFrom(Map<String, String> environment) {
+        return challengeFrom(environment, dynamoClient(), sesClient());
+    }
+    static CriarDesafio challengeFrom(Map<String, String> environment, DynamoDbClient dynamo, SesV2Client ses) {
+        Clock clock = Clock.systemUTC();
+        ConnectionProvider provider = provider(environment);
+        OtpHasher hasher = new OtpHasher();
+        DesafioStore store = new DynamoDesafioStore(dynamo, required(environment, "CHALLENGE_TABLE"), hasher, clock);
+        EnviarCodigo email = new SesEnviarCodigo(ses, required(environment, "OTP_SENDER"));
+        StructuredLog.coldStart("cpf-challenge");
+        return new CriarDesafio(new JdbcClienteLookup(provider), store, email, new SecureCodigoGenerator(), hasher, clock);
+    }
+
+    /** Verification alone receives the customer signing key and has no SES capability. */
+    public static VerificarDesafio verificationFromEnvironment() {
+        try { return verificationFrom(resolvedEnvironment(System.getenv())); }
+        catch (RuntimeException exception) { throw new IllegalStateException("Verification function configuration unavailable"); }
+    }
+    static VerificarDesafio verificationFrom(Map<String, String> environment) {
+        return verificationFrom(environment, dynamoClient());
+    }
+    static VerificarDesafio verificationFrom(Map<String, String> environment, DynamoDbClient dynamo) {
+        Clock clock = Clock.systemUTC();
+        ConnectionProvider provider = provider(environment);
+        OtpHasher hasher = new OtpHasher();
+        DesafioStore store = new DynamoDesafioStore(dynamo, required(environment, "CHALLENGE_TABLE"), hasher, clock);
+        PrivateKey privateKey = privateKey(required(environment, "CUSTOMER_PRIVATE_KEY_B64"));
+        JwtTrust customerTrust = trust(environment, "CUSTOMER", "customer");
+        TokenSigner signer = new RsaTokenSigner(privateKey, required(environment, "CUSTOMER_KEY_ID"), customerTrust.issuer(), customerTrust.audience());
+        StructuredLog.coldStart("cpf-verification");
+        return new VerificarDesafio(new JdbcClienteLookup(provider), store, signer, clock);
     }
 
     static FunctionFactory authenticationFrom(Map<String, String> environment) {
@@ -82,7 +120,7 @@ public final class FunctionFactory {
 
     /** Composition for the gateway authorizer only; it must never receive signing, database or delivery configuration. */
     public static Authorizer authorizerFromEnvironment() {
-        return authorizerFrom(System.getenv());
+        return authorizerFrom(resolvedEnvironment(System.getenv()));
     }
 
     static Authorizer authorizerFrom(Map<String, String> environment) {
@@ -106,7 +144,7 @@ public final class FunctionFactory {
     /** Composition for the FIFO notification worker. It owns only its read model, ledger and SES transport. */
     public static NotificarStatus notificationFromEnvironment() {
         try {
-            Map<String, String> environment = System.getenv();
+            Map<String, String> environment = resolvedEnvironment(System.getenv());
             ConnectionProvider provider = new ConnectionProvider(new ConnectionProvider.Config(required(environment, "DB_HOST"), integer(environment, "DB_PORT"),
                     required(environment, "DB_NAME"), required(environment, "DB_USER"), required(environment, "DB_PASSWORD"), Path.of(required(environment, "DB_CA_PATH")).toAbsolutePath()));
             ClientOverrideConfiguration sdk = ClientOverrideConfiguration.builder().retryPolicy(RetryPolicy.builder().numRetries(2).build()).build();
@@ -119,6 +157,18 @@ public final class FunctionFactory {
             throw new IllegalStateException("Notification function configuration unavailable");
         }
     }
+
+    private static Map<String, String> resolvedEnvironment(Map<String, String> environment) { return SecretResolver.fromEnvironment(environment).values(); }
+    private static Map<String, String> without(Map<String, String> environment, String excluded) {
+        Map<String, String> copy = new java.util.HashMap<>(environment); copy.remove(excluded); return copy;
+    }
+    private static ConnectionProvider provider(Map<String, String> environment) {
+        return new ConnectionProvider(new ConnectionProvider.Config(required(environment, "DB_HOST"), integer(environment, "DB_PORT"), required(environment, "DB_NAME"),
+                required(environment, "DB_USER"), required(environment, "DB_PASSWORD"), Path.of(required(environment, "DB_CA_PATH")).toAbsolutePath()));
+    }
+    private static ClientOverrideConfiguration sdkConfig() { return ClientOverrideConfiguration.builder().retryPolicy(RetryPolicy.builder().numRetries(2).build()).build(); }
+    private static DynamoDbClient dynamoClient() { return DynamoDbClient.builder().httpClientBuilder(UrlConnectionHttpClient.builder()).overrideConfiguration(sdkConfig()).build(); }
+    private static SesV2Client sesClient() { return SesV2Client.builder().httpClientBuilder(UrlConnectionHttpClient.builder()).overrideConfiguration(sdkConfig()).build(); }
 
     private static String required(Map<String, String> environment, String name) { String value = environment.get(name); if (value == null || value.isBlank()) throw new IllegalArgumentException(); return value; }
     private static int integer(Map<String, String> environment, String name) { try { return Integer.parseInt(required(environment, name)); } catch (NumberFormatException e) { throw new IllegalArgumentException(); } }

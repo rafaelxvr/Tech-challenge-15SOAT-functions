@@ -12,6 +12,10 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
+import java.nio.file.Path;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.services.sesv2.SesV2Client;
+import static org.mockito.Mockito.mock;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -65,5 +69,22 @@ class FunctionFactoryTest {
                 .subject("staff.fixture@example.invalid").claim("principal_type", "staff").claim("token_use", use)
                 .claim("roles", java.util.List.of("ADMIN")).issuedAt(Date.from(now)).expiration(Date.from(now.plusSeconds(900)))
                 .signWith(key, Jwts.SIG.HS256).compact();
+    }
+
+    @Test void challengeCompositionStartsWithoutSigningKeyButVerificationRequiresIt(@org.junit.jupiter.api.io.TempDir Path directory) throws Exception {
+        Map<String, String> challenge = Map.of(
+                "DB_HOST", "db.example.invalid", "DB_PORT", "5432", "DB_NAME", "oficina", "DB_USER", "functions", "DB_PASSWORD", "value-from-secret",
+                "DB_CA_PATH", directory.resolve("rds-ca.pem").toAbsolutePath().toString(), "CHALLENGE_TABLE", "challenge-table", "OTP_SENDER", "noreply@example.invalid");
+        assertThat(FunctionFactory.challengeFrom(challenge, mock(DynamoDbClient.class), mock(SesV2Client.class))).isNotNull();
+        assertThatThrownBy(() -> FunctionFactory.verificationFrom(challenge, mock(DynamoDbClient.class))).isInstanceOf(IllegalArgumentException.class);
+
+        var generator = KeyPairGenerator.getInstance("RSA"); generator.initialize(2048);
+        String privateKey = Base64.getEncoder().encodeToString(generator.generateKeyPair().getPrivate().getEncoded());
+        Map<String, String> verification = new java.util.HashMap<>(challenge);
+        verification.put("CUSTOMER_PRIVATE_KEY_B64", privateKey);
+        verification.put("CUSTOMER_KEY_ID", "customer-2026-01");
+        verification.put("CUSTOMER_JWT_ISSUER", "oficina-staging-customer");
+        verification.put("CUSTOMER_JWT_AUDIENCE", "oficina-staging-api");
+        assertThat(FunctionFactory.verificationFrom(verification, mock(DynamoDbClient.class))).isNotNull();
     }
 }

@@ -41,6 +41,12 @@ supported setting. Authentication handlers receive `CUSTOMER_PRIVATE_KEY_B64`; t
 authorizer receives only `CUSTOMER_PUBLIC_KEY_B64` and never the private key, database,
 DynamoDB or SES settings.
 
+## ARN-only secret delivery and RDS trust anchor
+
+Local development and unit tests may retain direct environment values. Kubernetes/Lambda deployment supplies only the following declared Secrets Manager ARN settings: `DATABASE_SECRET_ARN`, `CUSTOMER_SIGNING_SECRET_ARN`, `AUTHORIZER_TRUST_SECRET_ARN`, and `RDS_CA_CERT_SECRET_ARN`. Each non-certificate secret is a JSON object whose string properties use the existing bootstrap names. `DATABASE_SECRET_ARN` contains `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD`; the signing secret contains `CUSTOMER_PRIVATE_KEY_B64`; authorizer trust contains `CUSTOMER_PUBLIC_KEY_B64` and `STAFF_HMAC_SECRET`.
+
+`DB_CA_PATH` remains a non-secret deployment setting and must be `/opt/certs/rds-ca.pem` in managed deployment. `RDS_CA_CERT_SECRET_ARN` contains only PEM text. Bootstrap validates it, creates the configured parent directory, and materializes it to `DB_CA_PATH` for PostgreSQL `verify-full`; no certificate or secret value is committed or logged. Challenge composition intentionally excludes `CUSTOMER_SIGNING_SECRET_ARN`; only verification resolves it. Secrets Manager calls allow only declared ARN settings and use two retries with a two-second attempt/five-second call deadline.
+
 `contracts/phase3-v1` is immutable. F3 vendors APP's A7 `contracts/phase3-v2`
 byte-for-byte and records a FUN SHA-256 manifest. Only v2 `routes.json` is packaged
 as a classpath resource. The loader matches exact API Gateway route keys, uses

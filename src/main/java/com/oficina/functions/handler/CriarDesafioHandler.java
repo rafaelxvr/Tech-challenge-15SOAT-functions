@@ -17,7 +17,7 @@ public final class CriarDesafioHandler implements RequestHandler<APIGatewayV2HTT
     private static final Set<String> FIELDS = Set.of("cpf");
     private final CriarDesafio criar;
 
-    public CriarDesafioHandler() { this(FunctionFactoryHolder.factory().criarDesafio()); }
+    public CriarDesafioHandler() { this(FunctionFactoryHolder.challenge()); }
     public CriarDesafioHandler(CriarDesafio criar) { this.criar = criar; }
 
     @Override public APIGatewayV2HTTPResponse handleRequest(APIGatewayV2HTTPEvent event, Context context) {
