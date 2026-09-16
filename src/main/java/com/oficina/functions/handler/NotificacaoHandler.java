@@ -26,25 +26,31 @@ public final class NotificacaoHandler implements RequestHandler<SQSEvent, Void> 
         if (event == null || event.getRecords() == null || event.getRecords().size() != 1) throw new IllegalArgumentException("Expected one FIFO record");
         SQSEvent.SQSMessage message = event.getRecords().get(0);
         if (message.getBody() == null || message.getBody().getBytes(StandardCharsets.UTF_8).length > 8 * 1024) throw new IllegalArgumentException("Unsupported notification payload");
+        StatusOrdemServicoRegistrado parsed;
         try {
             JsonNode node = JSON.readTree(message.getBody());
-            StatusOrdemServicoRegistrado parsed = event(node);
-            try (var trace = TraceContextAdapter.extract(parsed.traceparent())) {
-                String correlation = parsed.correlationId().toString();
-                try {
-                    notificacao.executar(parsed, message.getAttributes() == null ? null : message.getAttributes().get("MessageGroupId"));
-                    JsonLogger.event("notification_completed", correlation, TraceContextAdapter.current(), "ses_accepted_or_suppressed");
-                } catch (IllegalArgumentException exception) {
-                    JsonLogger.event("notification_failed", correlation, TraceContextAdapter.current(), "invalid_event");
-                    throw exception;
-                } catch (Exception exception) {
-                    JsonLogger.event("notification_failed", correlation, TraceContextAdapter.current(), "processing_failure");
-                    throw new IllegalStateException("Notification processing failed");
-                }
+            parsed = event(node);
+        } catch (IllegalArgumentException exception) {
+            JsonLogger.event("notification_failed", null, null, "invalid_event");
+            throw exception;
+        } catch (Exception exception) {
+            JsonLogger.event("notification_failed", null, null, "processing_failure");
+            throw new IllegalStateException("Notification processing failed");
+        }
+        try (var trace = TraceContextAdapter.extract(parsed.traceparent())) {
+            String correlation = parsed.correlationId().toString();
+            try {
+                notificacao.executar(parsed, message.getAttributes() == null ? null : message.getAttributes().get("MessageGroupId"));
+                JsonLogger.event("notification_completed", correlation, TraceContextAdapter.current(), "ses_accepted_or_suppressed");
+            } catch (IllegalArgumentException exception) {
+                JsonLogger.event("notification_failed", correlation, TraceContextAdapter.current(), "invalid_event");
+                throw exception;
+            } catch (Exception exception) {
+                JsonLogger.event("notification_failed", correlation, TraceContextAdapter.current(), "processing_failure");
+                throw new IllegalStateException("Notification processing failed");
             }
-            return null;
-        } catch (IllegalArgumentException exception) { JsonLogger.event("notification_failed", null, null, "invalid_event"); throw exception; }
-        catch (Exception exception) { JsonLogger.event("notification_failed", null, null, "processing_failure"); throw new IllegalStateException("Notification processing failed"); }
+        }
+        return null;
     }
     private static StatusOrdemServicoRegistrado event(JsonNode n) {
         if (n == null || !n.isObject()) throw new IllegalArgumentException("Unsupported notification payload");

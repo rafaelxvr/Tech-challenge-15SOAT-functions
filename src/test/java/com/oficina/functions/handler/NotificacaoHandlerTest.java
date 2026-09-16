@@ -28,12 +28,14 @@ class NotificacaoHandlerTest {
             System.setOut(new PrintStream(captured, true, StandardCharsets.UTF_8));
             assertThatThrownBy(() -> new NotificacaoHandler(failing).handleRequest(sqs(body), null)).isInstanceOf(IllegalStateException.class);
         } finally { System.setOut(original); }
-        String line = captured.toString(StandardCharsets.UTF_8).trim();
-        var json = new ObjectMapper().readTree(line);
+        String output = captured.toString(StandardCharsets.UTF_8).trim();
+        var lines = output.lines().filter(line -> !line.isBlank()).toList();
+        assertThat(lines).hasSize(1);
+        var json = new ObjectMapper().readTree(lines.get(0));
         assertThat(json.path("event_name").asText()).isEqualTo("notification_failed");
         assertThat(json.path("correlation_id").asText()).isEqualTo("00000000-0000-0000-0000-000000000401");
         assertThat(json.path("traceparent").asText()).isEqualTo("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
-        assertThat(line).doesNotContain("private@example.test", "Bearer secret");
+        assertThat(output).doesNotContain("private@example.test", "Bearer secret");
         assertThat(TraceContextAdapter.current()).isNull();
     }
     private static SQSEvent sqs(String body) { SQSEvent.SQSMessage message = new SQSEvent.SQSMessage(); message.setBody(body); message.setAttributes(Map.of("MessageGroupId", "00000000-0000-0000-0000-000000000201")); SQSEvent event = new SQSEvent(); event.setRecords(new ArrayList<>(List.of(message))); return event; }
