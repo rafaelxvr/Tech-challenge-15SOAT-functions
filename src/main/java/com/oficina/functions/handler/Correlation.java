@@ -4,6 +4,7 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
 import java.util.Map;
 import java.util.UUID;
+import com.oficina.functions.observability.TraceContextAdapter;
 
 final class Correlation {
     private Correlation() { }
@@ -20,5 +21,11 @@ final class Correlation {
         for (Map.Entry<String, String> header : event.getHeaders().entrySet())
             if ("content-type".equalsIgnoreCase(header.getKey())) return header.getValue() != null && header.getValue().toLowerCase().startsWith("application/json");
         return false;
+    }
+    static String traceparent(APIGatewayV2HTTPEvent event) {
+        if (event == null || event.getHeaders() == null) return null;
+        for (Map.Entry<String, String> header : event.getHeaders().entrySet())
+            if ("traceparent".equalsIgnoreCase(header.getKey()) && TraceContextAdapter.valid(header.getValue())) return header.getValue();
+        return null;
     }
 }

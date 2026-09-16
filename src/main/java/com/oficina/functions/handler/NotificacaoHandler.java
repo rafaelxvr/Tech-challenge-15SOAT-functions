@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oficina.functions.bootstrap.FunctionFactory;
 import com.oficina.functions.notification.NotificarStatus;
 import com.oficina.functions.notification.StatusOrdemServicoRegistrado;
+import com.oficina.functions.observability.JsonLogger;
+import com.oficina.functions.observability.TraceContextAdapter;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -26,10 +28,14 @@ public final class NotificacaoHandler implements RequestHandler<SQSEvent, Void> 
         if (message.getBody() == null || message.getBody().getBytes(StandardCharsets.UTF_8).length > 8 * 1024) throw new IllegalArgumentException("Unsupported notification payload");
         try {
             JsonNode node = JSON.readTree(message.getBody());
-            notificacao.executar(event(node), message.getAttributes() == null ? null : message.getAttributes().get("MessageGroupId"));
+            StatusOrdemServicoRegistrado parsed = event(node);
+            try (var trace = TraceContextAdapter.extract(parsed.traceparent())) {
+                notificacao.executar(parsed, message.getAttributes() == null ? null : message.getAttributes().get("MessageGroupId"));
+                JsonLogger.event("notification_completed", parsed.correlationId().toString(), TraceContextAdapter.current(), "ses_accepted_or_suppressed");
+            }
             return null;
-        } catch (IllegalArgumentException exception) { throw exception; }
-        catch (Exception exception) { throw new IllegalStateException("Notification processing failed"); }
+        } catch (IllegalArgumentException exception) { JsonLogger.event("notification_failed", null, null, "invalid_event"); throw exception; }
+        catch (Exception exception) { JsonLogger.event("notification_failed", null, null, "processing_failure"); throw new IllegalStateException("Notification processing failed"); }
     }
     private static StatusOrdemServicoRegistrado event(JsonNode n) {
         if (n == null || !n.isObject()) throw new IllegalArgumentException("Unsupported notification payload");

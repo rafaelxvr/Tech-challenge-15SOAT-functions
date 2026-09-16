@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oficina.functions.auth.AutenticacaoException;
 import com.oficina.functions.auth.CriarDesafio;
+import com.oficina.functions.observability.JsonLogger;
+import com.oficina.functions.observability.TraceContextAdapter;
 import java.util.Iterator;
 import java.util.Set;
 
@@ -22,7 +24,7 @@ public final class CriarDesafioHandler implements RequestHandler<APIGatewayV2HTT
 
     @Override public APIGatewayV2HTTPResponse handleRequest(APIGatewayV2HTTPEvent event, Context context) {
         String correlation = Correlation.id(event, context);
-        try {
+        try (var trace = TraceContextAdapter.extract(Correlation.traceparent(event))) {
             if (!Correlation.json(event) || event == null || Boolean.TRUE.equals(event.getIsBase64Encoded())
                     || event.getBody() == null || event.getBody().length() > 512)
                 return HttpResponses.failure(400, correlation, "REQUISICAO_INVALIDA");
@@ -33,10 +35,13 @@ public final class CriarDesafioHandler implements RequestHandler<APIGatewayV2HTT
                     ? null : event.getRequestContext().getHttp().getSourceIp();
             if (source == null || source.isBlank()) return HttpResponses.failure(400, correlation, "REQUISICAO_INVALIDA");
             var issued = criar.executar(body.path("cpf").textValue(), source);
-            return HttpResponses.success(202, correlation, new ChallengeData(issued.desafioId().toString(), issued.expiraEmSegundos()));
+            var response = HttpResponses.success(202, correlation, new ChallengeData(issued.desafioId().toString(), issued.expiraEmSegundos()));
+            JsonLogger.event("http_request_completed", correlation, TraceContextAdapter.current(), "challenge_accepted"); return response;
         } catch (AutenticacaoException exception) {
+            JsonLogger.event("http_request_completed", correlation, TraceContextAdapter.current(), "challenge_rejected");
             return HttpResponses.failure(exception.status(), correlation, exception.codigo());
         } catch (Exception exception) {
+            JsonLogger.event("http_request_completed", correlation, TraceContextAdapter.current(), "challenge_invalid");
             return HttpResponses.failure(400, correlation, "REQUISICAO_INVALIDA");
         }
     }
