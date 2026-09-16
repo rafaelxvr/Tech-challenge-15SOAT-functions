@@ -1,4 +1,5 @@
 /target/
+**/.terraform/
 /.idea/
 *.iml
 *.log
