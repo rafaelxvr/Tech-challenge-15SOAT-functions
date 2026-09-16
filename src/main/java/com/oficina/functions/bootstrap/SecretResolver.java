@@ -65,6 +65,9 @@ final class SecretResolver {
     private static void materializeCa(String configuredPath, String pem) {
         if (!pem.startsWith("-----BEGIN CERTIFICATE-----") || !pem.contains("-----END CERTIFICATE-----"))
             throw new IllegalArgumentException("Invalid RDS CA certificate");
+        // Lambda's deployed code and layer locations are read-only. IaC must set DB_CA_PATH under /tmp/oficina.
+        if (!configuredPath.matches("/tmp/oficina/[A-Za-z0-9_.-]+\\.pem"))
+            throw new IllegalArgumentException("RDS CA target must be a writable /tmp/oficina PEM path");
         try {
             Path target = Path.of(configuredPath).toAbsolutePath().normalize();
             Files.createDirectories(target.getParent());
