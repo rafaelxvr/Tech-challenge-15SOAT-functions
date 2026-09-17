@@ -15,6 +15,7 @@
     "rds_ca_certificate": "arn:aws:secretsmanager:us-east-1:638612472889:secret:oficina/staging/rds-ca-certificate-IfnhR3"
   },
   "rds_ca_bundle_sha256": "b1711d12bae51838581281e23b6cb97b1074016873b4dafc80ed14002462dd77",
+  "app_jwt_secret_synchronized": true,
   "newrelic_layers": {
     "java": "arn:aws:lambda:us-east-1:451483290750:layer:NewRelicJava17:29",
     "extension": "arn:aws:lambda:us-east-1:451483290750:layer:NewRelicLambdaExtension:77"

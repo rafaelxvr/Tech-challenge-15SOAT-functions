@@ -100,6 +100,7 @@ planned_monthly_invocations  = { challenge = <n>, verification = <n>, authorizer
 newrelic_java_slim_layer_arn = arn:aws:lambda:us-east-1:451483290750:layer:NewRelicJava17:29
 newrelic_extension_layer_arn = arn:aws:lambda:us-east-1:451483290750:layer:NewRelicLambdaExtension:77
 ownership_handoff_reviewed   = true
+app_jwt_secret_synchronized = true
 ```
 
 The public JWK must contain only `kty`, `alg`, `use`, `n`, and `e`, use RSA /
