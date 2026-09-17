@@ -61,7 +61,12 @@ exit 2
     "@echo off`r`npwsh -NoProfile -File `"%~dp0mock-aws.ps1`" %*`r`nexit /b %ERRORLEVEL%`r`n" | Set-Content -LiteralPath $awsCmdPath -Encoding ascii
     if ($IsLinux -or $IsMacOS) {
         $awsUnixPath = Join-Path $mockBin 'aws'
-        "#!/usr/bin/env pwsh`npwsh -NoProfile -File `"$mockAwsPath`" `$@`nexit `$LASTEXITCODE" | Set-Content -LiteralPath $awsUnixPath -Encoding utf8
+        $unixShim = @'
+#!/usr/bin/env pwsh
+pwsh -NoProfile -File "__MOCK_AWS__" "$@"
+exit $?
+'@.Replace('__MOCK_AWS__', $mockAwsPath)
+        $unixShim | Set-Content -LiteralPath $awsUnixPath -Encoding utf8
         & chmod +x $awsUnixPath
     }
     $env:PATH = "$mockBin;$oldPath"
