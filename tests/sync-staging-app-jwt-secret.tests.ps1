@@ -39,15 +39,14 @@ try {
     $mockAws = @'
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
 $ErrorActionPreference = 'Stop'
-if ($Arguments[0] -eq 'sts') { '638612472889'; exit 0 }
-if ($Arguments[0] -ne 'secretsmanager') { exit 2 }
-$operation = $Arguments[1]
-if ($operation -eq 'get-secret-value') {
-    $id = $Arguments[$Arguments.IndexOf('--secret-id') + 1]
-    if ($id -like '*authorizer-trust*') { Get-Content -LiteralPath $env:MOCK_AUTHORIZER_PATH -Raw } else { Get-Content -LiteralPath $env:MOCK_APP_PATH -Raw }
+$joined = $Arguments -join ' '
+if ($joined -match '(^|\s)sts(\s|$)') { '638612472889'; exit 0 }
+if ($joined -notmatch 'secretsmanager') { exit 2 }
+if ($joined -match 'get-secret-value') {
+    if ($joined -match 'authorizer-trust') { Get-Content -LiteralPath $env:MOCK_AUTHORIZER_PATH -Raw } else { Get-Content -LiteralPath $env:MOCK_APP_PATH -Raw }
     exit 0
 }
-if ($operation -eq 'put-secret-value') {
+if ($joined -match 'put-secret-value') {
     $file = $Arguments[$Arguments.IndexOf('--secret-string') + 1].Substring(7)
     Copy-Item -LiteralPath $file -Destination $env:MOCK_PUT_PATH -Force
     @{ ARN = 'arn:aws:secretsmanager:us-east-1:638612472889:secret:oficina/staging/app-AAAAAA' } | ConvertTo-Json -Compress
