@@ -43,7 +43,7 @@ lambda_artifact.sha256_hex        = cdc4553afd15de062e9c128287e05d198d8900b02c42
 lambda_artifact.sha256_base64     = zcRVOv0V3gYunBKCh+BdGY2JALAsQg0UJNQa0jf076Y=
 ```
 
-The object metadata identifies source commit `6a3def0`. Before any deployment,
+The object metadata identifies source commit `6a3def0175f5dbc9c981aa905b34ea6c9f72a1a9`. Before any deployment,
 the executor must independently verify the object bytes against both digest
 encodings.
 
