@@ -78,6 +78,14 @@ Terraform receives only ARNs. It must never receive a secret value.
 The resolver rejects non-text fields, missing fields, unknown fields, malformed
 ARNs, and invalid certificate content. The Lambda environment sets
 `DB_CA_PATH=/tmp/oficina/rds-ca.pem` for the three database-connected handlers.
+The staging secret preparation script downloads the regional RDS bundle from
+`https://truststore.pki.rds.amazonaws.com/us-east-1/us-east-1-bundle.pem` and
+rejects bundles at or above 64 KiB. A normal retry creates only missing target
+secrets and preserves existing customer signing and authorizer trust material;
+when those two secrets already exist, the script requires a reviewed
+non-secret key metadata file and verifies its public JWK against both stored
+key representations before reporting it. Full rotation requires an explicit
+reviewed rotation switch.
 
 ## Remaining reviewed inputs
 
