@@ -1,0 +1,24 @@
+{
+  "environment": "staging",
+  "customer_key_id": "customer-2026-09",
+  "staff_key_id": "staff-2026-09",
+  "customer_public_jwk": {
+    "kty": "RSA",
+    "alg": "RS256",
+    "use": "sig",
+    "n": "yH0KNCUwLYxw_X7w2_n_Q-F_PP-wYt3euzpUdDNTwd9ZfUavYiXxDOORW5ZVbWSx8t-VEJIO2CTVz6BrsnbW8-poSAW_6eB3XGifxaV4Kljv1CPQJDSGHR7LbvwI1-o6rrlA-tu2F5oxRgJ7xEQ3Mo_MgeEXw0uCCTamPTLdv3g4csyaQ6uHhosE1kKLp5ggVxiPBps_0eUO_CEq4J0eZZXfpsoMhJfiyhlef5c7wqYB1ZWn6W-zFHSsvKEmDi6tDYShczzLGmfOqax1LU-BoT5b_IIc45qtn8ps3wQA9sgWDrS8wyEBvC7Gmh8bsNO5gD2DCnw2VaFt2vYTjDtgQQ",
+    "e": "AQAB"
+  },
+  "runtime_secret_arns": {
+    "customer_signing_key": "arn:aws:secretsmanager:us-east-1:638612472889:secret:oficina/staging/customer-signing-key-HvT5GG",
+    "authorizer_trust": "arn:aws:secretsmanager:us-east-1:638612472889:secret:oficina/staging/authorizer-trust-HN5r7N",
+    "rds_ca_certificate": "arn:aws:secretsmanager:us-east-1:638612472889:secret:oficina/staging/rds-ca-certificate-IfnhR3"
+  },
+  "rds_ca_bundle_sha256": "b1711d12bae51838581281e23b6cb97b1074016873b4dafc80ed14002462dd77",
+  "app_jwt_secret_synchronized": true,
+  "newrelic_layers": {
+    "java": "arn:aws:lambda:us-east-1:451483290750:layer:NewRelicJava17:29",
+    "extension": "arn:aws:lambda:us-east-1:451483290750:layer:NewRelicLambdaExtension:77"
+  },
+  "generated_at_utc": "2026-09-17"
+}

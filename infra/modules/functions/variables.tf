@@ -74,7 +74,7 @@ variable "newrelic_extension_layer_arn" {
   type        = string
   description = "Reviewed immutable New Relic extension layer ARN. The numeric layer version pins the artifact."
   validation {
-    condition     = can(regex("^arn:aws:lambda:us-east-1:451483290750:layer:NewRelicExtension:[1-9][0-9]*$", var.newrelic_extension_layer_arn))
+    condition     = can(regex("^arn:aws:lambda:us-east-1:451483290750:layer:NewRelicLambdaExtension:[1-9][0-9]*$", var.newrelic_extension_layer_arn))
     error_message = "newrelic_extension_layer_arn must be a pinned official New Relic extension ARN in us-east-1."
   }
 }
