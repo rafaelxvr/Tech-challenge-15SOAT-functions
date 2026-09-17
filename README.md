@@ -1,19 +1,18 @@
 # Oficina Functions
 
-This repository implements CPF challenge, token verification and notification handlers. K8S owns deployed Lambda resources; this repository has no local HTTP API or Dockerfile. The HTTP consumer contract is the APP [credential-free API snapshot](../Tech-challenge-15SOAT/docs/phase-3/api/contracts.md).
+Start with [architecture and sequences](docs/architecture.md), [requirement/evidence matrix](docs/evidence/requirements.md), and [APP API snapshots](../Tech-challenge-15SOAT/docs/phase-3/api/contracts.md).
 
 ```mermaid
 flowchart LR
-    Gateway[API Gateway] --> CPF[CPF Lambda]
-    CPF --> Dynamo[(DynamoDB)]
-    APP --> Queue[SQS FIFO]
-    Queue --> Notify[Notification Lambda] --> SES
+  Gateway[HTTP API] --> Auth[Challenge verification and authorizer handlers]
+  APP --> FIFO[SQS FIFO] --> Notify[Notification handler]
+  Auth --> Challenge[(DynamoDB challenge state)]
+  Notify --> Ledger[(DynamoDB delivery ledger)]
+  Notify --> SES
 ```
 
-## Technologies and architecture
+Technologies: Java 17, Maven, AWS SDK v2, Lambda, SQS, DynamoDB, SES and Terraform 1.15.8. Prerequisites: JDK 17, Docker for integration tests, PowerShell 7 and Terraform. There is no local HTTP server or Dockerfile; public routes use the APP contract and Lambda handler adapters.
 
-Java 17, Maven, Lambda Java handlers, DynamoDB, SQS FIFO and SES adapters. See [architecture](docs/architecture.md). From the root run `./mvnw.cmd -B verify` and `terraform -chdir=infra/modules/functions test`. CI is [`.github/workflows/ci.yml`](.github/workflows/ci.yml), triggered by push and pull request for `main`, `master`, and `develop`, plus manual dispatch.
+Run `./mvnw.cmd -B verify` (Linux: `./mvnw -B verify`) and `pwsh -File tests/verify-infrastructure.ps1`. [CI](.github/workflows/ci.yml) runs on PRs/pushes for main/develop without a cloud identity.
 
-Prerequisites: Java 17, the Maven wrapper, Terraform 1.15.8, and reviewed K8S environment inputs for handoff.
-
-Deployment needs the reviewed [K8S handoff](../oficina-k8s-infra/docs/architecture.md), protected identity and authorized R4 window. No endpoint is claimed active.
+I5 runtime roots now exist in this repository, but [single-owner state transfer](docs/runtime-permissions.md) from overlapping K8S definitions is required before activation. [I7 cloud adapters remain disabled](docs/i7-pipeline-contracts.md). This source guide records no live endpoint, deployment or SES delivery result. Documentation is checked from the APP checkout with `python scripts/check-doc-links.py docs README.md` across all four sibling repositories.
