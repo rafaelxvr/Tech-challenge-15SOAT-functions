@@ -9,17 +9,17 @@ locals {
         var.newrelic_extension_layer_arn
       ]
       environment = {
-        NEW_RELIC_SERVERLESS_MODE                       = "true"
-        NEW_RELIC_DISTRIBUTED_TRACING_ENABLED           = "true"
-        NEW_RELIC_LAMBDA_EXTENSION_ENABLED              = "true"
-        NEW_RELIC_LAMBDA_EXTENSION_LOGS_ENABLED         = "true"
+        NEW_RELIC_SERVERLESS_MODE                        = "true"
+        NEW_RELIC_DISTRIBUTED_TRACING_ENABLED            = "true"
+        NEW_RELIC_LAMBDA_EXTENSION_ENABLED               = "true"
+        NEW_RELIC_LAMBDA_EXTENSION_LOGS_ENABLED          = "true"
         NEW_RELIC_APPLICATION_LOGGING_FORWARDING_ENABLED = "false"
-        NEW_RELIC_LICENSE_KEY_SECRET                    = var.newrelic_ingest_secret_arn
+        NEW_RELIC_LICENSE_KEY_SECRET                     = var.newrelic_ingest_secret_arn
       }
       # There is intentionally no forwarding Lambda/subscription filter. The extension is the
       # one configured New Relic log delivery path; CloudWatch remains Lambda's short-lived source log.
-      log_forwarder                       = "newrelic-extension"
-      cloudwatch_subscription_filter_arn  = ""
+      log_forwarder                      = "newrelic-extension"
+      cloudwatch_subscription_filter_arn = ""
     }
   }
   newrelic_extension_secret_actions   = ["secretsmanager:GetSecretValue"]

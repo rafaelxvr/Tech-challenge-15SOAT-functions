@@ -1,0 +1,7 @@
+# The platform-owned inline buildspec verifies the versioned bundle before scripts/deploy.ps1.
+# This archive file must never replace that checksum guard.
+version: 0.2
+phases:
+  build:
+    commands:
+      - 'echo "FUNCTION_DEPLOYMENT_DISABLED: archive buildspec is inert"; exit 1'

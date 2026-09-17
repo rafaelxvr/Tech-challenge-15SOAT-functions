@@ -1,5 +1,12 @@
 name: Verify
 
+permissions:
+  contents: read
+
+concurrency:
+  group: functions-verify-${{ github.ref }}
+  cancel-in-progress: false
+
 on:
   push:
     branches: [main, master, develop]
@@ -18,3 +25,10 @@ jobs:
           java-version: "17"
           cache: maven
       - run: ./mvnw -B verify
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+      - name: Verify source-only infrastructure and inert deployment contracts
+        shell: pwsh
+        run: ./tests/verify-infrastructure.ps1
