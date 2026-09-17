@@ -32,8 +32,8 @@ variables {
   approved_secret_count        = 16
   planned_monthly_invocations  = { challenge = 100, verification = 100, authorizer = 1000, notification = 100 }
   operator_email               = "operator@example.invalid"
-  newrelic_java_slim_layer_arn = "arn:aws:lambda:us-east-1:451483290750:layer:NewRelicJava17:42"
-  newrelic_extension_layer_arn = "arn:aws:lambda:us-east-1:451483290750:layer:NewRelicExtension:18"
+  newrelic_java_slim_layer_arn = "arn:aws:lambda:us-east-1:451483290750:layer:NewRelicJava17:29"
+  newrelic_extension_layer_arn = "arn:aws:lambda:us-east-1:451483290750:layer:NewRelicLambdaExtension:77"
   customer_public_keys         = { "customer-2026-01" = { kty = "RSA", alg = "RS256", use = "sig", e = "AQAB", n = join("", [for i in range(342) : "A"]) } }
   ownership_handoff_reviewed   = true
 }

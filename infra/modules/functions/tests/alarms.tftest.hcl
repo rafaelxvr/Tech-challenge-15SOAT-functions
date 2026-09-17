@@ -13,8 +13,8 @@ variables {
     notification = "oficina-phase3-staging-notification"
   }
   operator_email               = "operator@example.invalid"
-  newrelic_java_slim_layer_arn = "arn:aws:lambda:us-east-1:451483290750:layer:NewRelicJava17:42"
-  newrelic_extension_layer_arn = "arn:aws:lambda:us-east-1:451483290750:layer:NewRelicExtension:18"
+  newrelic_java_slim_layer_arn = "arn:aws:lambda:us-east-1:451483290750:layer:NewRelicJava17:29"
+  newrelic_extension_layer_arn = "arn:aws:lambda:us-east-1:451483290750:layer:NewRelicLambdaExtension:77"
   newrelic_ingest_secret_arn   = "arn:aws:secretsmanager:us-east-1:123456789012:secret:oficina/staging/newrelic-ingest-AbCdEf"
 }
 

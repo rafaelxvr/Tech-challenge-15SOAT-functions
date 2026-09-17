@@ -89,8 +89,8 @@ customer_key_id              = <current staging customer kid>
 staff_key_id                 = <current staging staff kid>
 customer_public_keys         = <public RSA JWK map indexed by customer_key_id>
 planned_monthly_invocations  = { challenge = <n>, verification = <n>, authorizer = <n>, notification = <n> }
-newrelic_java_slim_layer_arn = arn:aws:lambda:us-east-1:451483290750:layer:NewRelicJava17:<pinned-version>
-newrelic_extension_layer_arn = arn:aws:lambda:us-east-1:451483290750:layer:NewRelicExtension:<pinned-version>
+newrelic_java_slim_layer_arn = arn:aws:lambda:us-east-1:451483290750:layer:NewRelicJava17:29
+newrelic_extension_layer_arn = arn:aws:lambda:us-east-1:451483290750:layer:NewRelicLambdaExtension:77
 ownership_handoff_reviewed   = true
 ```
 
@@ -144,8 +144,8 @@ non-secret receipts; do not put secret values in this file.
   "planned_monthly_invocations": { "challenge": "<n>", "verification": "<n>", "authorizer": "<n>", "notification": "<n>" },
   "operator_email": "rafaelxv.dev@gmail.com",
   "newrelic_ingest_secret_arn": "arn:aws:secretsmanager:us-east-1:638612472889:secret:oficina/staging/newrelic-ingest-juFFoQ",
-  "newrelic_java_slim_layer_arn": "arn:aws:lambda:us-east-1:451483290750:layer:NewRelicJava17:<pinned-version>",
-  "newrelic_extension_layer_arn": "arn:aws:lambda:us-east-1:451483290750:layer:NewRelicExtension:<pinned-version>",
+  "newrelic_java_slim_layer_arn": "arn:aws:lambda:us-east-1:451483290750:layer:NewRelicJava17:29",
+  "newrelic_extension_layer_arn": "arn:aws:lambda:us-east-1:451483290750:layer:NewRelicLambdaExtension:77",
   "ownership_handoff_reviewed": true
 }
 ```

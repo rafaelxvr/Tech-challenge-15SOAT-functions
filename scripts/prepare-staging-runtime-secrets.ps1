@@ -3,6 +3,10 @@ param(
     [Parameter(Mandatory)][ValidatePattern('^arn:aws:secretsmanager:us-east-1:638612472889:secret:oficina/staging/app-[A-Za-z0-9]{6}$')][string]$AppStagingSecretId,
     [ValidateSet('study-process')][string]$AwsProfile = 'study-process',
     [ValidateSet('us-east-1')][string]$AwsRegion = 'us-east-1',
+    [string]$StaffHmacSecretFile,
+    [switch]$AllowExternalStaffHmacSecret,
+    [switch]$AllowReviewedRotation,
+    [switch]$ConfirmKeySynchronization,
     [switch]$DryRun,
     [switch]$Apply
 )
@@ -54,6 +58,14 @@ function Get-AwsAccountId {
     return $account
 }
 
+function Assert-StaffHmacSecret {
+    param([Parameter(Mandatory)][string]$Secret)
+    if ([string]::IsNullOrWhiteSpace($Secret) -or [Text.Encoding]::UTF8.GetByteCount($Secret) -lt 32) {
+        throw 'Staff HMAC secret is shorter than the required 32 UTF-8 bytes.'
+    }
+    return $Secret
+}
+
 function Get-AppStaffHmacSecret {
     $raw = Invoke-AwsCapture -Operation 'APP staging secret retrieval' -Arguments @(
         'secretsmanager', 'get-secret-value', '--secret-id', $AppStagingSecretId,
@@ -72,11 +84,25 @@ function Get-AppStaffHmacSecret {
     if ($null -eq $jwtProperty -or $jwtProperty.Value -isnot [string] -or [string]::IsNullOrWhiteSpace([string]$jwtProperty.Value)) {
         throw 'APP staging SecretString has no approved JWT_SECRET.'
     }
-    $secret = [string]$jwtProperty.Value
-    if ([Text.Encoding]::UTF8.GetByteCount($secret) -lt 32) {
-        throw 'APP JWT_SECRET is shorter than the required 32 UTF-8 bytes.'
+    return Assert-StaffHmacSecret ([string]$jwtProperty.Value)
+}
+
+function Get-StaffHmacSecret {
+    try {
+        return Get-AppStaffHmacSecret
+    } catch {
+        if ($_.Exception.Message -notin @('APP staging SecretString has no approved JWT_SECRET.', 'APP staging SecretString is missing.')) { throw }
+        if (-not $AllowExternalStaffHmacSecret -or [string]::IsNullOrWhiteSpace($StaffHmacSecretFile)) {
+            throw 'APP staging SecretString has no approved JWT_SECRET; fail-closed. A reviewed -StaffHmacSecretFile with -AllowExternalStaffHmacSecret is required for an explicit fallback.'
+        }
+        if (-not (Test-Path -LiteralPath $StaffHmacSecretFile -PathType Leaf)) { throw 'The reviewed staff HMAC secret file does not exist.' }
+        try {
+            return Assert-StaffHmacSecret ([IO.File]::ReadAllText((Resolve-Path -LiteralPath $StaffHmacSecretFile)))
+        } catch {
+            if ($_.Exception.Message -eq 'Staff HMAC secret is shorter than the required 32 UTF-8 bytes.') { throw }
+            throw 'The reviewed staff HMAC secret file could not be read.'
+        }
     }
-    return $secret
 }
 
 function Convert-ToBase64Url {
@@ -105,7 +131,10 @@ function Get-ReviewedLayerArn {
 }
 
 function Get-VerifiedLayerMetadata {
-    param([Parameter(Mandatory)][string]$LayerArn)
+    param(
+        [Parameter(Mandatory)][string]$LayerArn,
+        [Parameter(Mandatory)][string]$LayerName
+    )
     try {
         $raw = Invoke-AwsCapture -Operation 'New Relic layer verification' -Arguments @(
             'lambda', 'get-layer-version-by-arn', '--arn', $LayerArn,
@@ -121,6 +150,12 @@ function Get-VerifiedLayerMetadata {
     }
     $compatibleRuntimes = @()
     if ($null -ne $layer.CompatibleRuntimes) { $compatibleRuntimes = @($layer.CompatibleRuntimes) }
+    if ([string]::IsNullOrWhiteSpace([string]$layer.Content.CodeSha256)) {
+        throw 'New Relic layer verification returned no immutable code checksum.'
+    }
+    if ($LayerName -eq 'NewRelicJava17' -and -not ($compatibleRuntimes -contains 'java17')) {
+        throw 'The reviewed New Relic Java layer is not compatible with Java 17.'
+    }
     [ordered]@{
         arn                = [string]$layer.LayerVersionArn
         version            = [int]$layer.Version
@@ -195,6 +230,10 @@ function Get-RdsCaBundle {
 }
 
 if ($Apply -and $DryRun) { throw 'Choose either -DryRun or -Apply, not both.' }
+$externalHmacArgumentsValid = -not $AllowExternalStaffHmacSecret -or -not [string]::IsNullOrWhiteSpace($StaffHmacSecretFile)
+if (-not $externalHmacArgumentsValid) { throw '-AllowExternalStaffHmacSecret requires -StaffHmacSecretFile.' }
+$fileWithoutGuard = -not [string]::IsNullOrWhiteSpace($StaffHmacSecretFile) -and -not $AllowExternalStaffHmacSecret
+if ($fileWithoutGuard) { throw '-StaffHmacSecretFile requires -AllowExternalStaffHmacSecret.' }
 $isApply = $Apply.IsPresent
 if (-not $isApply) { $DryRun = $true }
 
@@ -202,10 +241,28 @@ New-Item -ItemType Directory -Path $script:TempRoot -Force | Out-Null
 try {
     $accountId = Get-AwsAccountId
     $javaLayerArn = Get-ReviewedLayerArn -LayerName 'NewRelicJava17' -DocumentationLabel 'newrelic_java_slim_layer_arn'
-    $extensionLayerArn = Get-ReviewedLayerArn -LayerName 'NewRelicExtension' -DocumentationLabel 'newrelic_extension_layer_arn'
-    $javaLayer = Get-VerifiedLayerMetadata -LayerArn $javaLayerArn
-    $extensionLayer = Get-VerifiedLayerMetadata -LayerArn $extensionLayerArn
-    $staffHmacSecret = Get-AppStaffHmacSecret
+    $extensionLayerArn = Get-ReviewedLayerArn -LayerName 'NewRelicLambdaExtension' -DocumentationLabel 'newrelic_extension_layer_arn'
+    $javaLayer = Get-VerifiedLayerMetadata -LayerArn $javaLayerArn -LayerName 'NewRelicJava17'
+    $extensionLayer = Get-VerifiedLayerMetadata -LayerArn $extensionLayerArn -LayerName 'NewRelicLambdaExtension'
+    $staffHmacSecret = Get-StaffHmacSecret
+
+    $secretNames = [ordered]@{
+        customer_signing_key = 'oficina/staging/customer-signing-key'
+        authorizer_trust     = 'oficina/staging/authorizer-trust'
+        rds_ca_certificate   = 'oficina/staging/rds-ca-certificate'
+    }
+    $existing = [ordered]@{}
+    foreach ($slot in $secretNames.Keys) { $existing[$slot] = Get-ExistingSecretArn -SecretName $secretNames[$slot] }
+    $existingArns = @($existing.Values | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    if ($existingArns.Count -ne (@($existingArns | Select-Object -Unique).Count)) {
+        throw 'Target secret inspection returned duplicate ARNs; refusing to continue.'
+    }
+    if ($isApply -and $existingArns.Count -gt 0 -and -not $AllowReviewedRotation) {
+        throw 'One or more target secrets already exist; use an explicit reviewed rotation authorization.'
+    }
+    if ($isApply -and -not $ConfirmKeySynchronization) {
+        throw 'Apply requires -ConfirmKeySynchronization after reviewing the emitted public JWK and key IDs.'
+    }
 
     $rsa = [Security.Cryptography.RSA]::Create()
     $rsa.KeySize = 2048
@@ -220,13 +277,6 @@ try {
     $authorizerSecretString = ([ordered]@{ CUSTOMER_PUBLIC_KEY_B64 = $publicKeyB64; STAFF_HMAC_SECRET = $staffHmacSecret } | ConvertTo-Json -Compress)
     $ca = Get-RdsCaBundle
 
-    $secretNames = [ordered]@{
-        customer_signing_key = 'oficina/staging/customer-signing-key'
-        authorizer_trust     = 'oficina/staging/authorizer-trust'
-        rds_ca_certificate   = 'oficina/staging/rds-ca-certificate'
-    }
-    $existing = [ordered]@{}
-    foreach ($slot in $secretNames.Keys) { $existing[$slot] = Get-ExistingSecretArn -SecretName $secretNames[$slot] }
     $secretArns = [ordered]@{
         customer_signing_key = $existing.customer_signing_key
         authorizer_trust     = $existing.authorizer_trust
