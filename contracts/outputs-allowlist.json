@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "outputs": {
+    "authorizerId": "authorizer_id",
+    "gatewayHandoff": "gateway_handoff",
+    "customerPublicKeys": "customer_public_keys",
+    "functionArns": "function_arns",
+    "notificationQueueUrl": "notification_queue_url",
+    "notificationQueueArn": "notification_queue_arn",
+    "notificationDlqArn": "notification_dlq_arn",
+    "notificationPublisherPolicyArn": "notification_publisher_policy_arn",
+    "artifactSha256": "artifact_sha256",
+    "nativeAlarmTopicArn": "native_alarm_topic_arn"
+  }
+}
