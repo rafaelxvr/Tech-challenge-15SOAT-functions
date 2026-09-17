@@ -29,14 +29,27 @@ sequenceDiagram
   participant P as PostgreSQL recipient view
   participant S as SES
   Q->>N: One versioned event
-  N->>D: Claim lease and check order cursor
-  N->>P: Read current eligible recipient
-  alt expired, duplicate or superseded event
-    N->>D: Record terminal suppression
-  else eligible notification
-    N->>S: Send fixed template
-    S-->>N: Acceptance
-    N->>D: Complete event and advance cursor
+  N->>D: Claim event lease
+  alt already terminal duplicate
+    N-->>Q: Return without recipient lookup
+  else lease busy
+    N-->>Q: Fail invocation for retry without recipient lookup
+  else lease acquired
+    N->>D: Read completed order sequence
+    alt sequence already superseded
+      N->>D: Complete SUPERSEDED without recipient lookup
+    else event expired
+      N->>D: Complete EXPIRED without recipient lookup
+    else event eligible for recipient check
+      N->>P: Read current recipient
+      alt recipient missing or ineligible
+        N->>D: Complete SUPPRESSED
+      else eligible recipient
+        N->>S: Send fixed template
+        S-->>N: Acceptance
+        N->>D: Complete SES_ACCEPTED and advance cursor
+      end
+    end
   end
 ```
 
