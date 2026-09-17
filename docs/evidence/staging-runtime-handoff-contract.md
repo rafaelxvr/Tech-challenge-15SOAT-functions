@@ -5,6 +5,22 @@ root. It records the live K8S gateway and foundation references that were
 checked read-only on 2026-09-17. It contains no secret values, private keys,
 public-key material, or Terraform state.
 
+## Read-only control-plane observation (2026-09-17)
+
+The latest read-only audit used AWS profile `study-process` in account
+`638612472889`, region `us-east-1`. API Gateway HTTP API `qcm8l43flb`
+currently exposes `GET /health` and `POST /api/auth/login`; both routes have
+`AuthorizationType=NONE`. RDS `oficina-phase3-staging-postgres` is
+`available`, PostgreSQL `16.15`, `db.t4g.micro`, private, `20 GiB`, with
+one-day backup retention. Staging launcher roles exist. No Lambda function
+whose name starts with `oficina-phase3` was present. The three FUN runtime
+secret slots (`customer_signing_key`, `authorizer_trust`, and
+`rds_ca_certificate`) remain missing. Lambda layer-list calls were denied by
+the cross-account resource policy.
+
+This observation is control-plane context only. It does not prove FUN readiness
+and does not authorize a Terraform apply or deployment.
+
 ## Live handoff inputs
 
 ```text
