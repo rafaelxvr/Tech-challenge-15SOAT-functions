@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory)][ValidatePattern('^arn:aws:secretsmanager:us-east-1:638612472889:secret:oficina/staging/app-[A-Za-z0-9]{6}$')][string]$AppStagingSecretId,
     [ValidateSet('study-process')][string]$AwsProfile = 'study-process',
     [ValidateSet('us-east-1')][string]$AwsRegion = 'us-east-1',
+    [string]$ReviewedKeyMetadataFile,
     [string]$StaffHmacSecretFile,
     [switch]$AllowExternalStaffHmacSecret,
     [switch]$AllowReviewedRotation,
@@ -15,7 +16,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $expectedAccountId = '638612472889'
-$rdsCaBundleUri = 'https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem'
+$rdsCaBundleUri = 'https://truststore.pki.rds.amazonaws.com/us-east-1/us-east-1-bundle.pem'
 $docPath = Join-Path $PSScriptRoot '..\docs\evidence\staging-runtime-handoff-contract.md'
 $script:TempRoot = Join-Path ([IO.Path]::GetTempPath()) ('oficina-staging-secret-prep-' + [guid]::NewGuid().ToString('N'))
 $rsa = $null
@@ -113,6 +114,75 @@ function Convert-ToBase64Url {
     return ([Convert]::ToBase64String($trimmed)).TrimEnd('=').Replace('+', '-').Replace('/', '_')
 }
 
+function Get-PublicJwkFromDer {
+    param([Parameter(Mandatory)][byte[]]$Der)
+    $existingRsa = [Security.Cryptography.RSA]::Create()
+    try {
+        $bytesRead = 0
+        $existingRsa.ImportSubjectPublicKeyInfo($Der, [ref]$bytesRead)
+        if ($bytesRead -ne $Der.Length) { throw 'Public key DER has trailing bytes.' }
+        $parameters = $existingRsa.ExportParameters($false)
+        return [ordered]@{ kty = 'RSA'; alg = 'RS256'; use = 'sig'; n = Convert-ToBase64Url $parameters.Modulus; e = Convert-ToBase64Url $parameters.Exponent }
+    } catch {
+        if ($_.Exception.Message -eq 'Public key DER has trailing bytes.') { throw }
+        throw 'Stored customer public key is not valid X.509 RSA material.'
+    } finally {
+        $existingRsa.Dispose()
+    }
+}
+
+function Assert-KeyId {
+    param(
+        [Parameter(Mandatory)][string]$Value,
+        [Parameter(Mandatory)][string]$Label
+    )
+    if ($Value -notmatch '^[A-Za-z0-9_-]{1,64}$') { throw "$Label is not a valid key ID." }
+    return $Value
+}
+
+function Get-ReviewedKeyMetadata {
+    if ([string]::IsNullOrWhiteSpace($ReviewedKeyMetadataFile)) {
+        throw 'Existing customer/authorizer secrets require a reviewed non-secret key metadata file.'
+    }
+    if (-not (Test-Path -LiteralPath $ReviewedKeyMetadataFile -PathType Leaf)) {
+        throw 'The reviewed key metadata file does not exist.'
+    }
+    try {
+        $metadata = Get-Content -LiteralPath $ReviewedKeyMetadataFile -Raw | ConvertFrom-Json
+    } catch {
+        throw 'The reviewed key metadata file is not valid JSON.'
+    }
+    foreach ($property in @('customer_key_id', 'staff_key_id', 'customer_public_jwk')) {
+    if ($null -eq $metadata.PSObject.Properties[$property]) { throw "Reviewed key metadata is missing $property." }
+    }
+    foreach ($property in @('customer_key_id', 'staff_key_id')) {
+        Assert-KeyId -Value ([string]$metadata.$property) -Label "Reviewed $property" | Out-Null
+    }
+    $jwk = $metadata.customer_public_jwk
+    $required = @('kty', 'alg', 'use', 'n', 'e')
+    if (@($jwk.PSObject.Properties.Name | Sort-Object) -join ',' -cne (@($required | Sort-Object) -join ',')) {
+        throw 'Reviewed customer public JWK must contain exactly kty, alg, use, n and e.'
+    }
+    if ([string]$jwk.kty -cne 'RSA' -or [string]$jwk.alg -cne 'RS256' -or [string]$jwk.use -cne 'sig' -or [string]$jwk.e -cne 'AQAB' -or [string]::IsNullOrWhiteSpace([string]$jwk.n)) {
+        throw 'Reviewed customer public JWK is not the approved RSA/RS256 shape.'
+    }
+    [ordered]@{
+        customer_key_id     = [string]$metadata.customer_key_id
+        staff_key_id        = [string]$metadata.staff_key_id
+        customer_public_jwk = [ordered]@{ kty = [string]$jwk.kty; alg = [string]$jwk.alg; use = [string]$jwk.use; n = [string]$jwk.n; e = [string]$jwk.e }
+    }
+}
+
+function Assert-PublicJwkMatches {
+    param(
+        [Parameter(Mandatory)]$Expected,
+        [Parameter(Mandatory)]$Actual
+    )
+    foreach ($property in @('kty', 'alg', 'use', 'n', 'e')) {
+        if ([string]$Expected.$property -cne [string]$Actual.$property) { throw 'Stored customer public key does not match reviewed JWK metadata.' }
+    }
+}
+
 function Get-ReviewedLayerArn {
     param(
         [Parameter(Mandatory)][string]$LayerName,
@@ -182,6 +252,53 @@ function Get-ExistingSecretArn {
     }
 }
 
+function Get-ExistingSecretField {
+    param(
+        [Parameter(Mandatory)][string]$SecretArn,
+        [Parameter(Mandatory)][string]$FieldName
+    )
+    $raw = Invoke-AwsCapture -Operation 'existing runtime secret verification' -Arguments @(
+        'secretsmanager', 'get-secret-value', '--secret-id', $SecretArn,
+        '--profile', $AwsProfile, '--region', $AwsRegion,
+        '--query', 'SecretString', '--output', 'text', '--no-cli-pager'
+    )
+    try {
+        $document = $raw | ConvertFrom-Json
+    } catch {
+        throw 'Existing runtime secret is not valid JSON.'
+    }
+    $property = $document.PSObject.Properties[$FieldName]
+    if ($null -eq $property -or $property.Value -isnot [string] -or [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+        throw "Existing runtime secret is missing $FieldName."
+    }
+    return [string]$property.Value
+}
+
+function Get-ExistingCustomerPublicJwk {
+    param(
+        [Parameter(Mandatory)][string]$CustomerSecretArn,
+        [Parameter(Mandatory)][string]$AuthorizerSecretArn
+    )
+    $authorizerPublicB64 = Get-ExistingSecretField -SecretArn $AuthorizerSecretArn -FieldName 'CUSTOMER_PUBLIC_KEY_B64'
+    $customerPrivateB64 = Get-ExistingSecretField -SecretArn $CustomerSecretArn -FieldName 'CUSTOMER_PRIVATE_KEY_B64'
+    try {
+        $authorizerJwk = Get-PublicJwkFromDer -Der ([Convert]::FromBase64String($authorizerPublicB64))
+        $customerRsa = [Security.Cryptography.RSA]::Create()
+        try {
+            $bytesRead = 0
+            $customerRsa.ImportPkcs8PrivateKey([Convert]::FromBase64String($customerPrivateB64), [ref]$bytesRead)
+            $customerPublicDer = $customerRsa.ExportSubjectPublicKeyInfo()
+            $customerJwk = Get-PublicJwkFromDer -Der $customerPublicDer
+        } finally {
+            $customerRsa.Dispose()
+        }
+    } catch {
+        throw 'Existing customer signing and authorizer trust material is not valid RSA key material.'
+    }
+    Assert-PublicJwkMatches -Expected $authorizerJwk -Actual $customerJwk
+    return $authorizerJwk
+}
+
 function Write-SecretFile {
     param(
         [Parameter(Mandatory)][string]$SecretName,
@@ -213,17 +330,19 @@ function Write-SecretFile {
 }
 
 function Get-RdsCaBundle {
-    $caPath = Join-Path $script:TempRoot 'global-bundle.pem'
+    $caPath = Join-Path $script:TempRoot 'us-east-1-bundle.pem'
     try {
         $null = Invoke-WebRequest -Uri $rdsCaBundleUri -OutFile $caPath -UseBasicParsing -ErrorAction Stop
+        $size = (Get-Item -LiteralPath $caPath).Length
+        if ($size -ge 65536) { throw 'RDS regional CA bundle is 64 KiB or larger.' }
         $pem = [IO.File]::ReadAllText($caPath)
         if ($pem -notmatch '(?m)^-----BEGIN CERTIFICATE-----$' -or $pem -notmatch '(?m)^-----END CERTIFICATE-----$') {
             throw 'RDS CA bundle did not contain PEM certificates.'
         }
         return [ordered]@{ value = $pem; sha256 = (Get-FileHash -LiteralPath $caPath -Algorithm SHA256).Hash.ToLowerInvariant() }
     } catch {
-        if ($_.Exception.Message -eq 'RDS CA bundle did not contain PEM certificates.') { throw }
-        throw 'RDS global CA bundle could not be downloaded or validated.'
+        if ($_.Exception.Message -in @('RDS regional CA bundle is 64 KiB or larger.', 'RDS CA bundle did not contain PEM certificates.')) { throw }
+        throw 'RDS us-east-1 CA bundle could not be downloaded or validated.'
     } finally {
         Remove-TemporaryFile $caPath
     }
@@ -244,7 +363,6 @@ try {
     $extensionLayerArn = Get-ReviewedLayerArn -LayerName 'NewRelicLambdaExtension' -DocumentationLabel 'newrelic_extension_layer_arn'
     $javaLayer = Get-VerifiedLayerMetadata -LayerArn $javaLayerArn -LayerName 'NewRelicJava17'
     $extensionLayer = Get-VerifiedLayerMetadata -LayerArn $extensionLayerArn -LayerName 'NewRelicLambdaExtension'
-    $staffHmacSecret = Get-StaffHmacSecret
 
     $secretNames = [ordered]@{
         customer_signing_key = 'oficina/staging/customer-signing-key'
@@ -257,35 +375,69 @@ try {
     if ($existingArns.Count -ne (@($existingArns | Select-Object -Unique).Count)) {
         throw 'Target secret inspection returned duplicate ARNs; refusing to continue.'
     }
-    if ($isApply -and $existingArns.Count -gt 0 -and -not $AllowReviewedRotation) {
-        throw 'One or more target secrets already exist; use an explicit reviewed rotation authorization.'
-    }
-    if ($isApply -and -not $ConfirmKeySynchronization) {
-        throw 'Apply requires -ConfirmKeySynchronization after reviewing the emitted public JWK and key IDs.'
+
+    $customerExists = -not [string]::IsNullOrWhiteSpace([string]$existing.customer_signing_key)
+    $authorizerExists = -not [string]::IsNullOrWhiteSpace([string]$existing.authorizer_trust)
+    $rotationRequested = $AllowReviewedRotation.IsPresent
+    if (($customerExists -xor $authorizerExists) -and -not $rotationRequested) {
+        throw 'Customer signing and authorizer trust targets must exist together; use explicit full rotation for a partial state.'
     }
 
-    $rsa = [Security.Cryptography.RSA]::Create()
-    $rsa.KeySize = 2048
-    if ($rsa.KeySize -ne 2048) { throw 'The generated customer RSA key is not 2048 bits.' }
-    $privateKeyB64 = [Convert]::ToBase64String($rsa.ExportPkcs8PrivateKey())
-    $publicKeyB64 = [Convert]::ToBase64String($rsa.ExportSubjectPublicKeyInfo())
-    $parameters = $rsa.ExportParameters($false)
-    $customerKeyId = 'customer-' + ([datetime]::UtcNow.ToString('yyyy-MM'))
-    $staffKeyId = 'staff-' + ([datetime]::UtcNow.ToString('yyyy-MM'))
-    $publicJwk = [ordered]@{ kty = 'RSA'; alg = 'RS256'; use = 'sig'; n = Convert-ToBase64Url $parameters.Modulus; e = Convert-ToBase64Url $parameters.Exponent }
-    $customerSecretString = ([ordered]@{ CUSTOMER_PRIVATE_KEY_B64 = $privateKeyB64 } | ConvertTo-Json -Compress)
-    $authorizerSecretString = ([ordered]@{ CUSTOMER_PUBLIC_KEY_B64 = $publicKeyB64; STAFF_HMAC_SECRET = $staffHmacSecret } | ConvertTo-Json -Compress)
-    $ca = Get-RdsCaBundle
+    $customerSecretString = $null
+    $authorizerSecretString = $null
+    $customerKeyId = $null
+    $staffKeyId = $null
+    $publicJwk = $null
+    $ca = $null
+    $keyMaterialWillBeWritten = $rotationRequested -or -not $customerExists
+    if (-not $keyMaterialWillBeWritten) {
+        $storedJwk = Get-ExistingCustomerPublicJwk -CustomerSecretArn $existing.customer_signing_key -AuthorizerSecretArn $existing.authorizer_trust
+        $reviewedMetadata = Get-ReviewedKeyMetadata
+        Assert-PublicJwkMatches -Expected $reviewedMetadata.customer_public_jwk -Actual $storedJwk
+        $customerKeyId = $reviewedMetadata.customer_key_id
+        $staffKeyId = $reviewedMetadata.staff_key_id
+        $publicJwk = $storedJwk
+    } else {
+        if ($isApply -and -not $ConfirmKeySynchronization) {
+            throw 'Apply requires -ConfirmKeySynchronization after reviewing the emitted public JWK and key IDs.'
+        }
+        $staffHmacSecret = Get-StaffHmacSecret
+        $rsa = [Security.Cryptography.RSA]::Create()
+        $rsa.KeySize = 2048
+        if ($rsa.KeySize -ne 2048) { throw 'The generated customer RSA key is not 2048 bits.' }
+        $privateKeyB64 = [Convert]::ToBase64String($rsa.ExportPkcs8PrivateKey())
+        $publicKeyB64 = [Convert]::ToBase64String($rsa.ExportSubjectPublicKeyInfo())
+        $parameters = $rsa.ExportParameters($false)
+        $customerKeyId = Assert-KeyId -Value ('customer-' + ([datetime]::UtcNow.ToString('yyyy-MM'))) -Label 'Generated customer_key_id'
+        $staffKeyId = Assert-KeyId -Value ('staff-' + ([datetime]::UtcNow.ToString('yyyy-MM'))) -Label 'Generated staff_key_id'
+        $publicJwk = [ordered]@{ kty = 'RSA'; alg = 'RS256'; use = 'sig'; n = Convert-ToBase64Url $parameters.Modulus; e = Convert-ToBase64Url $parameters.Exponent }
+        $customerSecretString = ([ordered]@{ CUSTOMER_PRIVATE_KEY_B64 = $privateKeyB64 } | ConvertTo-Json -Compress)
+        $authorizerSecretString = ([ordered]@{ CUSTOMER_PUBLIC_KEY_B64 = $publicKeyB64; STAFF_HMAC_SECRET = $staffHmacSecret } | ConvertTo-Json -Compress)
+    }
+
+    $caWillBeWritten = $rotationRequested -or [string]::IsNullOrWhiteSpace([string]$existing.rds_ca_certificate)
+    if ($caWillBeWritten) { $ca = Get-RdsCaBundle }
 
     $secretArns = [ordered]@{
         customer_signing_key = $existing.customer_signing_key
         authorizer_trust     = $existing.authorizer_trust
         rds_ca_certificate   = $existing.rds_ca_certificate
     }
+    $secretStatus = [ordered]@{}
+    foreach ($slot in $secretNames.Keys) {
+        $exists = -not [string]::IsNullOrWhiteSpace([string]$existing[$slot])
+        $willWrite = $keyMaterialWillBeWritten
+        if ($slot -eq 'rds_ca_certificate') { $willWrite = $caWillBeWritten }
+        $secretStatus[$slot] = if ($exists -and -not $willWrite) { 'existing' } elseif ($isApply) { if ($exists) { 'rotated' } else { 'created' } } else { if ($exists) { 'would_rotate' } else { 'would_create' } }
+    }
     if ($isApply) {
-        $secretArns.customer_signing_key = Write-SecretFile -SecretName $secretNames.customer_signing_key -SecretString $customerSecretString -ExistingArn $existing.customer_signing_key
-        $secretArns.authorizer_trust = Write-SecretFile -SecretName $secretNames.authorizer_trust -SecretString $authorizerSecretString -ExistingArn $existing.authorizer_trust
-        $secretArns.rds_ca_certificate = Write-SecretFile -SecretName $secretNames.rds_ca_certificate -SecretString $ca.value -ExistingArn $existing.rds_ca_certificate
+        if ($keyMaterialWillBeWritten) {
+            $secretArns.customer_signing_key = Write-SecretFile -SecretName $secretNames.customer_signing_key -SecretString $customerSecretString -ExistingArn $existing.customer_signing_key
+            $secretArns.authorizer_trust = Write-SecretFile -SecretName $secretNames.authorizer_trust -SecretString $authorizerSecretString -ExistingArn $existing.authorizer_trust
+        }
+        if ($caWillBeWritten) {
+            $secretArns.rds_ca_certificate = Write-SecretFile -SecretName $secretNames.rds_ca_certificate -SecretString $ca.value -ExistingArn $existing.rds_ca_certificate
+        }
     }
 
     [ordered]@{
@@ -293,10 +445,11 @@ try {
         account_id           = $accountId
         region               = $AwsRegion
         secret_arns          = $secretArns
+        secret_status        = $secretStatus
         customer_key_id      = $customerKeyId
         staff_key_id         = $staffKeyId
         customer_public_jwk  = $publicJwk
-        rds_ca_bundle_sha256 = $ca.sha256
+        rds_ca_bundle_sha256 = if ($null -eq $ca) { $null } else { $ca.sha256 }
         newrelic_layers      = @($javaLayer, $extensionLayer)
     } | ConvertTo-Json -Depth 8
 } finally {
