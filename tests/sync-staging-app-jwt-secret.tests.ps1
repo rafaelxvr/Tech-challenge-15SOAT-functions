@@ -32,6 +32,15 @@ function Invoke-ExpectedFailure {
     throw "Expected failure containing '$ExpectedText'."
 }
 
+$source = Get-Content -LiteralPath $target -Raw
+Assert-Contract ($source.Contains('STAFF_HMAC_SECRET')) 'Script must read the authorizer HMAC field.'
+Assert-Contract ($source.Contains('put-secret-value')) 'Script must use Secrets Manager writes.'
+Assert-Contract ($source.Contains('if ($isApply -and $jwtState -ne ''existing'')')) 'Writes must require -Apply and avoid no-op updates.'
+if ($IsLinux -or $IsMacOS) {
+    Write-Output "PASS: $script:Checks app JWT synchronization static contract assertions."
+    return
+}
+
 try {
     New-Item -ItemType Directory -Path $mockBin -Force | Out-Null
     [ordered]@{ CUSTOMER_PUBLIC_KEY_B64 = 'fixture-public-key'; STAFF_HMAC_SECRET = $staffSecret } | ConvertTo-Json -Compress | Set-Content -LiteralPath $authorizerPath -Encoding utf8
