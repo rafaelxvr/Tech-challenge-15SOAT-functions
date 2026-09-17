@@ -3,6 +3,10 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
+& "$PSScriptRoot/source-package-contract.ps1"
+& "$PSScriptRoot/workflow-context-contract.ps1"
+& "$PSScriptRoot/cloud-window-tests.ps1"
+& "$PSScriptRoot/release-guards-contract.ps1"
 & "$PSScriptRoot/pipeline-contract.ps1"
 # The pre-existing monitoring module is verified too, without changing its source.
 foreach ($relative in @('infra/modules/functions', 'infra/modules/functions/runtime', 'infra/environments/staging', 'infra/environments/production')) {

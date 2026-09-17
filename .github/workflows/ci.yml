@@ -9,10 +9,10 @@ concurrency:
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: [main, develop]
   pull_request:
-    branches: [main, master, develop]
-  workflow_dispatch:
+    branches: [main, develop]
+
 
 jobs:
   verify:

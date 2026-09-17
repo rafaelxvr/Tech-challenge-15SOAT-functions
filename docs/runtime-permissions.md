@@ -45,3 +45,5 @@ Verification's challenge CAS uses `dynamodb:ConditionCheckItem` alongside GetIte
 Run `pwsh -NoProfile -File tests/verify-infrastructure.ps1`. Live TLS/view permission tests, package digest verification, ownership migration, SES delivery, Lambda benchmarks/shared account quota, authorizer status codes and branch/environment protection evidence remain release prerequisites.
 
 Local evidence: verify-infrastructure.ps1 passed 35 pipeline assertions and 17 mocked Terraform runs (12 runtime, 1 monitoring, 2 per environment), with fmt/validate for all four roots/modules. Focused FunctionFactoryTest, SecretResolverTest and NotificacaoHandlerTest passed 8 Java tests. No AWS deployment or live authorization claim is implied. Existing instrumentation.tf changed only in Terraform formatting required by CI.
+
+I7 adds offline branch/artifact/window/lock validation; live activation remains disabled. See [the exact partial prerequisites](i7-pipeline-contracts.md).
