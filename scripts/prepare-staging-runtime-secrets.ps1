@@ -131,6 +131,15 @@ function Get-PublicJwkFromDer {
     }
 }
 
+function Assert-KeyId {
+    param(
+        [Parameter(Mandatory)][string]$Value,
+        [Parameter(Mandatory)][string]$Label
+    )
+    if ($Value -notmatch '^[A-Za-z0-9_-]{1,64}$') { throw "$Label is not a valid key ID." }
+    return $Value
+}
+
 function Get-ReviewedKeyMetadata {
     if ([string]::IsNullOrWhiteSpace($ReviewedKeyMetadataFile)) {
         throw 'Existing customer/authorizer secrets require a reviewed non-secret key metadata file.'
@@ -144,7 +153,10 @@ function Get-ReviewedKeyMetadata {
         throw 'The reviewed key metadata file is not valid JSON.'
     }
     foreach ($property in @('customer_key_id', 'staff_key_id', 'customer_public_jwk')) {
-        if ($null -eq $metadata.PSObject.Properties[$property]) { throw "Reviewed key metadata is missing $property." }
+    if ($null -eq $metadata.PSObject.Properties[$property]) { throw "Reviewed key metadata is missing $property." }
+    }
+    foreach ($property in @('customer_key_id', 'staff_key_id')) {
+        Assert-KeyId -Value ([string]$metadata.$property) -Label "Reviewed $property" | Out-Null
     }
     $jwk = $metadata.customer_public_jwk
     $required = @('kty', 'alg', 'use', 'n', 'e')
@@ -396,8 +408,8 @@ try {
         $privateKeyB64 = [Convert]::ToBase64String($rsa.ExportPkcs8PrivateKey())
         $publicKeyB64 = [Convert]::ToBase64String($rsa.ExportSubjectPublicKeyInfo())
         $parameters = $rsa.ExportParameters($false)
-        $customerKeyId = 'customer-' + ([datetime]::UtcNow.ToString('yyyy-MM'))
-        $staffKeyId = 'staff-' + ([datetime]::UtcNow.ToString('yyyy-MM'))
+        $customerKeyId = Assert-KeyId -Value ('customer-' + ([datetime]::UtcNow.ToString('yyyy-MM'))) -Label 'Generated customer_key_id'
+        $staffKeyId = Assert-KeyId -Value ('staff-' + ([datetime]::UtcNow.ToString('yyyy-MM'))) -Label 'Generated staff_key_id'
         $publicJwk = [ordered]@{ kty = 'RSA'; alg = 'RS256'; use = 'sig'; n = Convert-ToBase64Url $parameters.Modulus; e = Convert-ToBase64Url $parameters.Exponent }
         $customerSecretString = ([ordered]@{ CUSTOMER_PRIVATE_KEY_B64 = $privateKeyB64 } | ConvertTo-Json -Compress)
         $authorizerSecretString = ([ordered]@{ CUSTOMER_PUBLIC_KEY_B64 = $publicKeyB64; STAFF_HMAC_SECRET = $staffHmacSecret } | ConvertTo-Json -Compress)
