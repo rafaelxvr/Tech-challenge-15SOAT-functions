@@ -93,9 +93,9 @@ These are required before a plan can be accepted and must come from the APP
 signing-key receipt or the approved release record:
 
 ```text
-customer_key_id              = <current staging customer kid>
-staff_key_id                 = <current staging staff kid>
-customer_public_keys         = <public RSA JWK map indexed by customer_key_id>
+customer_key_id              = customer-2026-09
+staff_key_id                 = staff-2026-09
+customer_public_keys         = docs/evidence/staging-key-metadata.json
 planned_monthly_invocations  = { challenge = <n>, verification = <n>, authorizer = <n>, notification = <n> }
 newrelic_java_slim_layer_arn = arn:aws:lambda:us-east-1:451483290750:layer:NewRelicJava17:29
 newrelic_extension_layer_arn = arn:aws:lambda:us-east-1:451483290750:layer:NewRelicLambdaExtension:77
@@ -139,13 +139,13 @@ non-secret receipts; do not put secret values in this file.
   "runtime_secret_arns": {
     "auth_lookup": "arn:aws:secretsmanager:us-east-1:638612472889:secret:oficina/staging/auth-zNEIrm",
     "notification_lookup": "arn:aws:secretsmanager:us-east-1:638612472889:secret:oficina/staging/notification-l4pVTy",
-    "customer_signing_key": "<ARN returned after staging secret creation>",
-    "authorizer_trust": "<ARN returned after staging secret creation>",
-    "rds_ca_certificate": "<ARN returned after staging secret creation>"
+    "customer_signing_key": "arn:aws:secretsmanager:us-east-1:638612472889:secret:oficina/staging/customer-signing-key-HvT5GG",
+    "authorizer_trust": "arn:aws:secretsmanager:us-east-1:638612472889:secret:oficina/staging/authorizer-trust-HN5r7N",
+    "rds_ca_certificate": "arn:aws:secretsmanager:us-east-1:638612472889:secret:oficina/staging/rds-ca-certificate-IfnhR3"
   },
-  "customer_key_id": "<reviewed staging customer kid>",
-  "staff_key_id": "<reviewed staging staff kid>",
-  "customer_public_keys": { "<reviewed staging customer kid>": { "kty": "RSA", "alg": "RS256", "use": "sig", "n": "<public modulus>", "e": "AQAB" } },
+  "customer_key_id": "customer-2026-09",
+  "staff_key_id": "staff-2026-09",
+  "customer_public_keys": { "customer-2026-09": { "kty": "RSA", "alg": "RS256", "use": "sig", "n": "yH0KNCUwLYxw_X7w2_n_Q-F_PP-wYt3euzpUdDNTwd9ZfUavYiXxDOORW5ZVbWSx8t-VEJIO2CTVz6BrsnbW8-poSAW_6eB3XGifxaV4Kljv1CPQJDSGHR7LbvwI1-o6rrlA-tu2F5oxRgJ7xEQ3Mo_MgeEXw0uCCTamPTLdv3g4csyaQ6uHhosE1kKLp5ggVxiPBps_0eUO_CEq4J0eZZXfpsoMhJfiyhlef5c7wqYB1ZWn6W-zFHSsvKEmDi6tDYShczzLGmfOqax1LU-BoT5b_IIc45qtn8ps3wQA9sgWDrS8wyEBvC7Gmh8bsNO5gD2DCnw2VaFt2vYTjDtgQQ", "e": "AQAB" } },
   "ses_sender_email": "rafaelxv.dev@gmail.com",
   "ses_sandbox_mode": true,
   "approved_secret_count": 16,
