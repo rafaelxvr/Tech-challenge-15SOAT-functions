@@ -69,7 +69,7 @@ exit $?
         $unixShim | Set-Content -LiteralPath $awsUnixPath -Encoding utf8
         & chmod +x $awsUnixPath
     }
-    $env:PATH = "$mockBin;$oldPath"
+    $env:PATH = $mockBin + [IO.Path]::PathSeparator + $oldPath
     $env:MOCK_AUTHORIZER_PATH = $authorizerPath
     $env:MOCK_APP_PATH = $appPath
     $env:MOCK_PUT_PATH = $putPath
