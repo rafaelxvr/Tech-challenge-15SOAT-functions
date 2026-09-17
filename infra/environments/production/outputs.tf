@@ -1,4 +1,13 @@
 output "authorizer_id" { value = module.runtime.authorizer_id }
+output "gateway_handoff" {
+  value = {
+    api_id        = var.gateway.api_id
+    execution_arn = var.gateway.execution_arn
+    authorizer_id = module.runtime.authorizer_id
+    environment   = var.environment
+  }
+  description = "Canonical reviewed handoff consumed by K8S to bind protected routes."
+}
 output "function_arns" { value = module.runtime.function_arns }
 output "notification_queue_url" { value = module.runtime.notification_queue_url }
 output "notification_queue_arn" { value = module.runtime.notification_queue_arn }

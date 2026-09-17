@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "outputs": {
     "authorizerId": "authorizer_id",
+    "gatewayHandoff": "gateway_handoff",
     "customerPublicKeys": "customer_public_keys",
     "functionArns": "function_arns",
     "notificationQueueUrl": "notification_queue_url",

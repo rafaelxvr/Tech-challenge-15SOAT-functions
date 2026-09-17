@@ -43,6 +43,10 @@ run "explicit_environment_contract" {
     condition     = output.artifact_sha256 == var.lambda_artifact.sha256_hex
     error_message = "The root must preserve the reviewed immutable FUN artifact identity."
   }
+  assert {
+    condition     = output.gateway_handoff.api_id == var.gateway.api_id && output.gateway_handoff.execution_arn == var.gateway.execution_arn && output.gateway_handoff.environment == var.environment
+    error_message = "FUN must publish the canonical API/authorizer handoff for K8S."
+  }
 }
 run "reject_unreviewed_ownership" {
   command = plan

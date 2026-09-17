@@ -46,6 +46,7 @@ try {
     $allowlist = Get-Content "$repo/contracts/outputs-allowlist.json" -Raw | ConvertFrom-Json
     $raw = @{}; foreach ($field in $allowlist.outputs.PSObject.Properties) { $raw[$field.Value] = @{ sensitive = $false; value = 'reference-fixture' } }
     $raw.customer_public_keys.value = @{ 'customer-fixture' = @{ kty = 'RSA'; alg = 'RS256'; use = 'sig'; e = 'AQAB'; n = ('A' * 342) } }
+    $raw.gateway_handoff.value = @{ api_id = 'abc123'; execution_arn = 'arn:aws:execute-api:us-east-1:123456789012:abc123'; authorizer_id = 'auth123'; environment = 'staging' }
     $raw.password = @{ sensitive = $true; value = 'must-not-export' }
     $rawPath = Join-Path $temp 'outputs.json'; $outPath = Join-Path $temp 'filtered.json'
     $raw | ConvertTo-Json -Depth 6 | Set-Content $rawPath
@@ -56,6 +57,9 @@ try {
     $raw.customer_public_keys.value.'customer-fixture'.Remove('d')
     $raw.authorizer_id.sensitive = $true; $raw | ConvertTo-Json -Depth 6 | Set-Content $rawPath
     Reject { & "$repo/scripts/export-outputs.ps1" -Environment staging -SourceCommit $commit -TerraformOutputsJsonFile $rawPath -OutputFile $outPath } 'sensitive allowlisted field'
+    $raw.authorizer_id.sensitive = $false
+    $raw.gateway_handoff.value.execution_arn = 'arn:aws:execute-api:us-east-1:123456789012:different-api'; $raw | ConvertTo-Json -Depth 8 | Set-Content $rawPath
+    Reject { & "$repo/scripts/export-outputs.ps1" -Environment staging -SourceCommit $commit -TerraformOutputsJsonFile $rawPath -OutputFile $outPath } 'gateway handoff API mismatch'
     Write-Output "PASS: $script:checks source-only pipeline contracts; no AWS calls."
 } finally {
     $resolved = [IO.Path]::GetFullPath($temp)
