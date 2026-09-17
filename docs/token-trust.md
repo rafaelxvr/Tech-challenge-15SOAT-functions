@@ -1,0 +1,110 @@
+# Customer tokens and gateway route policy
+
+F3 implements F1 `TokenSigner` with `RsaTokenSigner`. It emits only customer access
+tokens: RS256, configured fixed `kid`, canonical UUID subject, positive current
+identity version, the two approved customer scopes, environment-specific issuer
+and audience, issued-at and an expiry exactly 900 seconds later. CPF and contact
+data never enter a token. Keys in tests are generated locally and are never
+production configuration.
+
+`CustomerTokenVerifier` receives a map of pinned RSA public keys only.
+`StaffTokenVerifier` receives a separate map of staff HMAC secrets and accepts only
+HS256 staff access tokens with ADMIN/MECANICO roles. Both require a configured
+issuer, audience, kid and clock. Neither derives environment configuration from
+token claims. Bind staging to `oficina-staging-customer` / `oficina-staging-staff`
+and `oficina-staging-api`; production uses the corresponding `oficina-production-*`
+values with separate keys and secrets. Secret bytes must match APP's configured
+staff signing bytes (APP currently uses the configured secret's UTF-8 bytes; do
+not independently Base64-decode them in FUN). Reject missing/unknown kid, alternate
+algorithms, refresh purpose, cross-environment claims, external/embedded key
+headers, unsupported critical/compression headers and invalid time claims.
+
+`Authorizer.autorizar(bearer, routeKey)` throws the sanitized 401
+`CREDENCIAIS_INVALIDAS` for missing/invalid credentials and returns false for a
+valid caller without a matching grant (handler maps to 403). Public routes must
+be configured without the authorizer. F3 includes no database client, identity
+lookup, ownership lookup or result cache. APP independently rechecks current
+customer status/version, order ownership, staff status/roles and domain rules on
+every operation. Raw tokens, subjects, claims and parser errors must not be logged.
+
+## Contract adoption
+
+## Lambda environment configuration
+
+The authentication functions use `CUSTOMER_JWT_ISSUER` and `CUSTOMER_JWT_AUDIENCE`.
+The gateway authorizer separately uses those two variables plus `STAFF_JWT_ISSUER`
+and `STAFF_JWT_AUDIENCE`; each pair is validated as a canonical matching environment:
+`oficina-staging-customer` / `oficina-staging-staff` / `oficina-staging-api`, or the
+same `production` names. It receives `STAFF_HMAC_SECRET` as the same raw text secret
+configured by APP and converts it once with UTF-8. `STAFF_HMAC_SECRET_B64` is not a
+supported setting. Authentication handlers receive `CUSTOMER_PRIVATE_KEY_B64`; the
+authorizer receives only `CUSTOMER_PUBLIC_KEY_B64` and never the private key, database,
+DynamoDB or SES settings.
+
+## ARN-only secret delivery and RDS trust anchor
+
+Local development and unit tests may retain direct environment values. Kubernetes/Lambda deployment supplies only the following declared Secrets Manager ARN settings: `DATABASE_SECRET_ARN`, `CUSTOMER_SIGNING_SECRET_ARN`, `AUTHORIZER_TRUST_SECRET_ARN`, and `RDS_CA_CERT_SECRET_ARN`. Each non-certificate secret is a JSON object whose string properties use the existing bootstrap names. `DATABASE_SECRET_ARN` contains `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD`; the signing secret contains `CUSTOMER_PRIVATE_KEY_B64`; authorizer trust contains `CUSTOMER_PUBLIC_KEY_B64` and `STAFF_HMAC_SECRET`.
+
+`DB_CA_PATH` remains a non-secret deployment setting and must be a writable `/tmp/oficina/<name>.pem` path; I5 must set `DB_CA_PATH=/tmp/oficina/rds-ca.pem`. Lambda's package and layer paths are read-only, so `/opt/certs/rds-ca.pem` is not valid for this materialized secret. `RDS_CA_CERT_SECRET_ARN` contains only PEM text. Bootstrap validates it, creates the configured parent directory, and materializes it to `DB_CA_PATH` for PostgreSQL `verify-full`; no certificate or secret value is committed or logged. Challenge composition intentionally excludes `CUSTOMER_SIGNING_SECRET_ARN`; only verification resolves it. Secrets Manager calls allow only declared ARN settings and use two retries with a two-second attempt/five-second call deadline.
+
+`contracts/phase3-v1` is immutable. F3 vendors APP's A7 `contracts/phase3-v2`
+byte-for-byte and records a FUN SHA-256 manifest. Only v2 `routes.json` is packaged
+as a classpath resource. The loader matches exact API Gateway route keys, uses
+all required customer scopes and any accepted staff role, and denies unknown
+routes by default. v2 adds ADMIN-only `GET /api/admin/relatorios/ordens` while
+preserving all 37 v1 entries. This completes FUN adoption; I4/I5 still must consume
+v2 before exposing that report route. I5 must set authorizer result TTL to **0**;
+F3 does not modify infrastructure or deploy it.
+
+## Public-key rotation and runtime separation
+
+1. Publish the next public key under a new kid in APP and authorizer configuration
+   before switching the verification/signing runtime to its private key.
+2. Keep both public keys available until at least the last old-key issuance time
+   plus the maximum customer JWT lifetime (900 seconds) plus configured clock
+   skew. Current F3 verification allows zero seconds of skew. If skew is added,
+   update both verifiers and the overlap interval together; include deployment
+   propagation delay before retiring a key.
+3. Retire the old public key only after that interval. The private key belongs
+   exclusively to the CPF verification/signing runtime. The authorizer role gets
+   customer public keys and its separate staff verification secret, never the
+   customer private key. I5 owns actual IAM/runtime bindings.
+
+`TokenAndRoutePolicyTest` emits `target/f3-contract-fixture.json` with a generated
+public key, one FUN-signed access token and tamper/purpose/algorithm negative
+vectors for local contract inspection. It never writes the
+private key. This output is ignored by Git and can be regenerated by the test.
+
+## Reproducible APP A3 interoperability check
+
+The committed `src/interop/java/com/oficina/functions/interop/AppTokenInterop.java`
+harness uses actual compiled APP `CustomerTokenValidator` classes and FUN
+`RsaTokenSigner`. Run it on Windows with PowerShell after Java 17 `mvnw verify` in
+FUN. APP must already have compiled A3 classes and its existing
+`target/surefire-reports/TEST-com.oficina.security.TokenTrustTest.xml` dependency
+classpath; the script never builds or modifies APP.
+
+```powershell
+.\scripts\verify-app-token-interop.ps1 -AppRoot 'D:/repository/Tech-challenge-15SOAT/.worktrees/phase-3-implementation' -JavaHome 'C:/Program Files/Eclipse Adoptium/jdk-17.0.20.101-hotspot' -ReceiptPath docs/evidence/app-token-interop-receipt.json
+```
+
+Each run generates new RSA keys in memory, signs through FUN, verifies the result
+through APP, asserts current identity rechecks, and rejects tampered, RSA-to-HMAC
+algorithm-confused and refresh-purpose tokens before any repository lookup. It
+asserts and records actual loaded APP/FUN class locations and SHA-256 values,
+Java version, Git HEAD/state and exact classpaths. Evidence is retained in a unique
+`target/app-token-interop/<run-id>/` directory with the successful log, classpaths,
+compiled harness and that run's public-only fixture. Private keys are never saved.
+These build outputs are ignored by Git; the harness and invocation script remain
+committed for review and future runs. APP HEAD is context; loaded-class hashes
+identify the exact bytecode actually tested even when APP classes predate HEAD.
+
+The committed `docs/evidence/app-token-interop-receipt.json` is a regeneration
+receipt from a successful Windows PowerShell 5.1 run with ErrorActionPreference
+set to Stop. It contains only allowlisted technical provenance and PASS assertions,
+including actual APP class origins/hashes and dependency jar names. No raw local
+paths, keys, token values, subjects or user data enter the receipt. `-ReceiptPath`
+regenerates it after a successful run; omitted, only local build evidence is saved.
+Java/compiler stderr is captured through .NET process streams so normal version
+output and JVM warnings cannot become PowerShell 5.1 terminating errors. Java 17
+remains enforced before compilation and again inside the Java harness.

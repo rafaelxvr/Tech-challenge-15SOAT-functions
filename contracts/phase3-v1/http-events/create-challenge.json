@@ -1,0 +1,9 @@
+{
+  "version": "2.0",
+  "routeKey": "POST /api/autenticacao/desafios",
+  "rawPath": "/api/autenticacao/desafios",
+  "headers": {"content-type": "application/json", "x-correlation-id": "fixture-123"},
+  "requestContext": {"http": {"method": "POST", "path": "/api/autenticacao/desafios", "sourceIp": "203.0.113.10"}},
+  "body": "{\"cpf\":\"390.533.447-05\"}",
+  "isBase64Encoded": false
+}
