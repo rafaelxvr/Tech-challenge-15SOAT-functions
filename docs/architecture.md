@@ -19,7 +19,7 @@ flowchart LR
   Notify --> SES
 ```
 
-FUN owns handler/use-case/adapters and the I5 runtime Terraform source. K8S still contains overlapping earlier runtime/authorizer definitions: the [reviewed state handoff](runtime-permissions.md) must establish one owner before activation. FUN does not own APP business mutations or PostgreSQL base tables. The API consumer contract is the [APP snapshot](../../Tech-challenge-15SOAT/docs/phase-3/api/contracts.md).
+FUN owns handler/use-case/adapters and the I5 runtime Terraform source. K8S owns the base API/stage and APP integrations; FUN owns the Lambda REQUEST authorizer and the two public CPF routes using the K8S API handoff. The [reviewed state handoff](runtime-permissions.md) documents the two-phase activation. FUN does not own APP business mutations or PostgreSQL base tables. The API consumer contract is the [APP snapshot](../../Tech-challenge-15SOAT/docs/phase-3/api/contracts.md).
 
 ```mermaid
 sequenceDiagram
