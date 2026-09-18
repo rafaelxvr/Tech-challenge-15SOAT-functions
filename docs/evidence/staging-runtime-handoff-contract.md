@@ -187,3 +187,6 @@ The next replay will validate the IAM-fixed staging executor receipt.
 
 This replay also verifies the generated event-source mapping tag-read permission.
 
+
+This replay verifies generated event-source mapping metadata reads after the IAM split.
+
