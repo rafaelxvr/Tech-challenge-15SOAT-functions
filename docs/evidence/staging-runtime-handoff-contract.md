@@ -184,3 +184,6 @@ Replay trigger remains documentation-only; runtime success will be recorded only
 
 The next replay will validate the IAM-fixed staging executor receipt.
 
+
+This replay also verifies the generated event-source mapping tag-read permission.
+
