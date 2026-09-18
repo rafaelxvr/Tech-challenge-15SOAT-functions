@@ -21,6 +21,12 @@ the cross-account resource policy.
 This observation is control-plane context only. It does not prove FUN readiness
 and does not authorize a Terraform apply or deployment.
 
+## Staging replay note
+
+After the shared K8S executor buildspec is refreshed, the next staging
+invocation is a replay of the reviewed FUN handoff. This is a planned trigger
+for fresh runtime evidence and does not claim that the replay has succeeded.
+
 ## Live handoff inputs
 
 ```text

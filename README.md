@@ -16,3 +16,5 @@ Technologies: Java 17, Maven, AWS SDK v2, Lambda, SQS, DynamoDB, SES and Terrafo
 Run `./mvnw.cmd -B verify` (Linux: `./mvnw -B verify`) and `pwsh -File tests/verify-infrastructure.ps1`. [CI](.github/workflows/ci.yml) runs on PRs/pushes for main/develop without a cloud identity.
 
 I5 runtime roots now exist in this repository, but [single-owner state transfer](docs/runtime-permissions.md) from overlapping K8S definitions is required before activation. [I7 cloud adapters remain disabled](docs/i7-pipeline-contracts.md). This source guide records no live endpoint, deployment or SES delivery result. Documentation is checked from the APP checkout with `python scripts/check-doc-links.py docs README.md` across all four sibling repositories.
+
+The next staging invocation is a replay after the shared K8S executor buildspec refresh. This note records the planned trigger only; it is not evidence of a successful deployment.
