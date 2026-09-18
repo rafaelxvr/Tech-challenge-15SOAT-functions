@@ -174,3 +174,7 @@ non-secret receipts; do not put secret values in this file.
 Do not run `terraform apply` from this contract. The Functions launcher remains
 fail-closed until ownership, artifact, secret inventory, cloud-window and
 executor wiring reviews are complete.
+
+## Fresh staging replay request
+
+This documentation-only change requests a fresh push-triggered staging replay after refreshing the environment-scoped CLOUD_WINDOW_EVIDENCE_JSON. It records no deployment result.
