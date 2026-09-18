@@ -181,3 +181,6 @@ This documentation-only change requests a fresh push-triggered staging replay af
 
 Replay trigger remains documentation-only; runtime success will be recorded only from the next staging executor receipt.
 
+
+The next replay will validate the IAM-fixed staging executor receipt.
+
