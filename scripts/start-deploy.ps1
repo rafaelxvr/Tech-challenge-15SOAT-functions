@@ -28,7 +28,13 @@ function Write-Result([string]$Status, [string]$BuildId = '') {
     if ([string]::IsNullOrWhiteSpace($ResultOutputFile)) { return }
     $parent = Split-Path -Parent $ResultOutputFile
     if ($parent -and -not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
-    [ordered]@{ schemaVersion = 1; environment = $Environment; sourceCommit = $SourceCommit; artifactSha256 = $ExpectedSha256; status = $Status; buildId = $BuildId; recordedAtUtc = [datetime]::UtcNow.ToString('o') } | ConvertTo-Json | Set-Content -LiteralPath $ResultOutputFile -NoNewline
+    $result=[ordered]@{ schemaVersion = 1; environment = $Environment; sourceCommit = $SourceCommit; artifactSha256 = $ExpectedSha256; status = $Status; buildId = $BuildId; recordedAtUtc = [datetime]::UtcNow.ToString('o') }
+    if ($Status -ceq 'SUCCEEDED') {
+        $result.runtimeBinding=@{lambda_artifact=$lambdaBinding;deployerImageDigest="sha256:$DeployerImageDigest";
+            sourceVersionId=$sourceUpload.VersionId;releaseManifestVersionId=$manifestUpload.VersionId;
+            terraformVariablesVersionId=$tfvarsUpload.VersionId;releaseManifestSha256=$ExpectedManifestSha256;terraformVariablesSha256=$tfvarsSha}
+    }
+    $result | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ResultOutputFile -NoNewline
 }
 if ($Environment -cne 'staging') { Fail 'production deployment is disabled; this launcher is staging-only.' }
 if ($SourcePrefix -cne 'releases/functions/staging' -or $ProjectName -cne 'oficina-phase3-oficina-functions-staging-deploy') { Fail 'source prefix or CodeBuild project is not the reviewed staging executor.' }
@@ -41,6 +47,8 @@ if ([string](Require $manifest 'contractVersion') -cne 'phase3-v2' -or [string]:
 & (Join-Path $PSScriptRoot 'check-workflow-context.ps1') -Environment staging -EventName $EventName -BranchRef $BranchRef | Out-Null
 & (Join-Path $PSScriptRoot 'check-cloud-window.ps1') -EvidenceFile $CloudWindowEvidenceFile -Environment staging | Out-Null
 if ($DryRun) { Write-Result 'DRY_RUN_VALIDATED'; Write-Output 'Deployment launch request validated; dry run did not call AWS.'; exit 0 }
+. (Join-Path $PSScriptRoot 'production-runtime-contract.ps1')
+$lambdaBinding=Get-FunctionsLambdaBinding (Get-Content -LiteralPath $TerraformVariablesFile -Raw | ConvertFrom-Json)
 $sourceKey = "$SourcePrefix/bundle.zip"
 $manifestKey = "$SourcePrefix/manifests/$SourceCommit.json"
 $tfvarsKey = "$SourcePrefix/config/$SourceCommit.tfvars.json"

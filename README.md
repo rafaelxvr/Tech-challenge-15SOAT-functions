@@ -19,4 +19,4 @@ I5 runtime roots now exist in this repository, but [single-owner state transfer]
 
 The next staging invocation is a replay after the shared K8S executor buildspec refresh. This note records the planned trigger only; it is not evidence of a successful deployment.
 
-Production automation is a main-only, explicitly gated [promotion review contract](docs/production-promotion-contract.md). It requires reviewed production inputs and a same-commit successful staging receipt, and remains deployment-disabled. The existing staging workflow is unchanged.
+Production automation is a main-only, explicitly gated [promotion review and runtime contract](docs/production-promotion-contract.md). Its workflow remains credential-free and validation-only. The private executor requires separate enable/apply gates and a same-commit successful staging receipt binding the identical versioned Lambda JAR and deployer digest. Remote production CodeBuild transport remains pending; defaults stay disabled. New successful staging receipts record these nonsecret runtime bindings.

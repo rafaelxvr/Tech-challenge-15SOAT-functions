@@ -14,6 +14,9 @@ param(
     [Parameter(Mandatory)][ValidatePattern('^[a-z]{2}-[a-z]+-\d+$')][string]$TerraformBackendRegion,
     [ValidatePattern('^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$')][string]$StateBucket,
     [switch]$SharedFoundationMutation,
+    [string]$ProductionEnabled='', [string]$ProductionLauncherEnabled='', [string]$ProtectedEnvironment='',
+    [string]$ProductionRoleArn='', [string]$ProductionInputsFile='', [string]$ExpectedProductionInputsSha256='',
+    [string]$EventName=$env:GITHUB_EVENT_NAME, [string]$BranchRef=$env:GITHUB_REF,
     [switch]$ApplyReviewedPlan,
     [switch]$DryRun
 )
@@ -22,7 +25,24 @@ $ErrorActionPreference = 'Stop'
 function Fail([string]$Message) { throw "Deployment execution failed: $Message" }
 function Require([object]$Object, [string]$Name) { $p = $Object.PSObject.Properties[$Name]; if ($null -eq $p -or $null -eq $p.Value -or ([string]$p.Value).Trim().Length -eq 0) { Fail "release manifest is missing '$Name'." }; return $p.Value }
 function Hash([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
-if ($Environment -cne 'staging') { Fail 'production deployment is disabled; the functions executor is staging-only.' }
+if ($Environment -ceq 'production') {
+    . (Join-Path $PSScriptRoot 'production-runtime-contract.ps1')
+    $review=Read-FunctionsProductionRuntime -Enabled $ProductionEnabled -LauncherEnabled $ProductionLauncherEnabled -ProtectedEnvironment $ProtectedEnvironment `
+        -RoleArn $ProductionRoleArn -InputsFile $ProductionInputsFile -ExpectedInputsSha256 $ExpectedProductionInputsSha256 `
+        -SourceCommit $SourceCommit -EventName $EventName -BranchRef $BranchRef
+    if ($TerraformBackendRegion -cne 'us-east-1' -or $TerraformBackendKey -cne 'functions/production.tfstate' -or
+        $TerraformBackendLockKey -cne 'functions/production.tfstate.tflock' -or $TerraformVariablesFile -cne '/tmp/oficina/functions_production.tfvars.json' -or
+        -not $SharedFoundationMutation -or $StateBucket -cne $review.Inputs.stateBucket -or $TerraformBackendBucket -cne $review.Inputs.stateBucket -or
+        $ExpectedManifestSha256 -cne $review.ReleaseFile.Sha256 -or (Hash $ReleaseManifest) -cne $review.ReleaseFile.Sha256 -or
+        $ExpectedSourceSha256 -cne $review.Source.Sha256 -or $ExpectedDeployerImageDigest -cne $review.Inputs.deployerImageDigest -or
+        $ExpectedTerraformVariablesSha256 -cne $review.TerraformVariables.Sha256 -or (Hash $TerraformVariablesFile) -cne $review.TerraformVariables.Sha256) {
+        Fail 'unreviewed production executor input binding.'
+    }
+    & (Join-Path $PSScriptRoot 'deploy-production.ps1') -Enabled $ProductionEnabled -LauncherEnabled $ProductionLauncherEnabled `
+        -ProtectedEnvironment $ProtectedEnvironment -RoleArn $ProductionRoleArn -InputsFile $ProductionInputsFile -ExpectedInputsSha256 $ExpectedProductionInputsSha256 `
+        -SourceCommit $SourceCommit -EventName $EventName -BranchRef $BranchRef -ApplyReviewedPlan:$ApplyReviewedPlan -DryRun:$DryRun
+    return
+}
 if ($TerraformBackendRegion -cne 'us-east-1' -or $TerraformBackendKey -cne 'functions/staging.tfstate' -or $TerraformBackendLockKey -cne 'functions/staging.tfstate.tflock' -or $TerraformVariablesFile -cne '/tmp/oficina/functions_staging.tfvars.json') { Fail 'Unreviewed function state, lock, region, or trusted tfvars path.' }
 if (-not $SharedFoundationMutation -or [string]::IsNullOrWhiteSpace($StateBucket)) { Fail 'staging execution requires the shared foundation lock and its reviewed state bucket.' }
 if (-not (Test-Path -LiteralPath $ReleaseManifest -PathType Leaf) -or -not (Test-Path -LiteralPath $TerraformVariablesFile -PathType Leaf)) { Fail 'release manifest and Terraform variables file are required.' }

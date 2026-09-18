@@ -141,5 +141,22 @@ jobs:
             -SourceCommit $env:GITHUB_SHA `
             -EventName $env:GITHUB_EVENT_NAME `
             -BranchRef $env:GITHUB_REF
-          # Contract validation is not deployment. The production runtime
-          # adapter remains disabled pending a separately reviewed change.
+          # Contract validation never obtains cloud identity or executes apply.
+
+      - name: Preflight explicitly selected production executor
+        if: vars.FUNCTIONS_PRODUCTION_LAUNCHER_ENABLED == 'true'
+        shell: pwsh
+        env:
+          FUNCTIONS_PRODUCTION_DEPLOYMENT_ENABLED: ${{ vars.FUNCTIONS_PRODUCTION_DEPLOYMENT_ENABLED }}
+          FUNCTIONS_PRODUCTION_LAUNCHER_ENABLED: ${{ vars.FUNCTIONS_PRODUCTION_LAUNCHER_ENABLED }}
+          FUNCTIONS_PRODUCTION_ROLE_ARN: ${{ vars.FUNCTIONS_PRODUCTION_ROLE_ARN }}
+          FUNCTIONS_PRODUCTION_INPUTS_SHA256: ${{ vars.FUNCTIONS_PRODUCTION_INPUTS_SHA256 }}
+        run: |
+          & ./scripts/deploy-production.ps1 `
+            -Enabled $env:FUNCTIONS_PRODUCTION_DEPLOYMENT_ENABLED `
+            -LauncherEnabled $env:FUNCTIONS_PRODUCTION_LAUNCHER_ENABLED `
+            -ProtectedEnvironment production -RoleArn $env:FUNCTIONS_PRODUCTION_ROLE_ARN `
+            -InputsFile (Join-Path $env:RUNNER_TEMP 'functions-production-review/production-inputs.json') `
+            -ExpectedInputsSha256 $env:FUNCTIONS_PRODUCTION_INPUTS_SHA256 `
+            -SourceCommit $env:GITHUB_SHA -EventName $env:GITHUB_EVENT_NAME -BranchRef $env:GITHUB_REF
+          # No apply switch and no production AWS/OIDC credentials.
