@@ -178,3 +178,8 @@ executor wiring reviews are complete.
 ## Fresh staging replay request
 
 This documentation-only change requests a fresh push-triggered staging replay after refreshing the environment-scoped CLOUD_WINDOW_EVIDENCE_JSON. It records no deployment result.
+
+## Replay request 2026-09-18 (IAM metadata resource correction)
+
+The staging replay is requested after the executor policy was corrected to allow the Lambda event-mapping metadata read APIs against the AWS-evaluated wildcard resource. The live managed policy is version v6; the corresponding infrastructure contract is tracked in K8S PR #24. This commit exists only to trigger the reviewed staging rehearsal; replace this request entry with the immutable runtime receipt after the run completes.
+
