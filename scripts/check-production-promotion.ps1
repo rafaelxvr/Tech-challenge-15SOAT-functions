@@ -7,7 +7,8 @@ param(
     [string]$ExpectedInputsSha256 = '',
     [string]$SourceCommit = '',
     [string]$EventName = $env:GITHUB_EVENT_NAME,
-    [string]$BranchRef = $env:GITHUB_REF
+    [string]$BranchRef = $env:GITHUB_REF,
+    [switch]$PassThru
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -119,7 +120,11 @@ $lambdaHash = String-Field $lambda 'sha256_hex'
 if ($lambdaHash -cnotmatch '\A[a-f0-9]{64}\z' -or
     (String-Field $lambda 'sha256_base64') -cne [Convert]::ToBase64String([Convert]::FromHexString($lambdaHash))) { throw 'FUNCTIONS_PRODUCTION_LAMBDA_DIGEST_INVALID' }
 & (Join-Path $PSScriptRoot 'check-cloud-window.ps1') -EvidenceFile $window.Path -Environment production | Out-Null
-if ($LauncherEnabled -cnotin @('','false')) {
-    throw 'FUNCTIONS_PRODUCTION_LAUNCHER_NOT_IMPLEMENTED: a separate reviewed production adapter is required.'
+if ($LauncherEnabled -cnotin @('','false','true')) {
+    throw 'FUNCTIONS_PRODUCTION_LAUNCHER_GATE_INVALID'
+}
+if ($PassThru) {
+    return [pscustomobject]@{Inputs=$inputs;Release=$release;Source=$source;ReleaseFile=$releaseFile;
+        TerraformVariables=$tfvarsFile;Config=$tfvars;Window=$window;Receipt=$receipt}
 }
 Write-Output 'PRODUCTION_CONTRACT_VALIDATED_DEPLOYMENT_DISABLED'
