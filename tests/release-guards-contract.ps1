@@ -9,6 +9,8 @@ function Save($value, $path) { $value | ConvertTo-Json -Depth 10 | Set-Content -
 function Hash($path) { (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() }
 function Reject([scriptblock]$action) { try { & $action | Out-Null } catch { return }; throw 'Expected release input rejection.' }
 try {
+    $launcherSource = Get-Content "$repo/scripts/start-deploy.ps1" -Raw
+    if (-not $launcherSource.Contains('$sourceKey = "$SourcePrefix/bundle.zip"')) { throw 'Launcher source key must match the fixed CodeBuild bundle location.' }
     $bundle = Join-Path $temp 'bundle.zip'; 'release' | Set-Content $bundle -NoNewline
     $tfvars = Join-Path $temp 'functions_staging.tfvars.json'; '{}' | Set-Content $tfvars -NoNewline
     $commit = 'a'*40; $digest = Hash $bundle; $manifestPath = Join-Path $temp 'manifest.json'
