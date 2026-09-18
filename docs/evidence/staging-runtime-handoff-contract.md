@@ -1,5 +1,7 @@
 # Staging runtime handoff contract
 
+The [production promotion review contract](../production-promotion-contract.md) consumes a separately reviewed successful staging terminal receipt for the exact same commit. Its main-only job is gated off by default and remains deployment-disabled even after valid review. This source change does not alter the staging observations below or establish production/R4 acceptance.
+
 This document is the non-secret input contract for the FUN staging Terraform
 root. It records the live K8S gateway and foundation references that were
 checked read-only on 2026-09-17. It contains no secret values, private keys,

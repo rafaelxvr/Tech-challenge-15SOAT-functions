@@ -90,3 +90,56 @@ jobs:
           Set-Content -LiteralPath $evidence -NoNewline -Value $env:CLOUD_WINDOW_EVIDENCE_JSON
           Set-Content -LiteralPath $tfvars -NoNewline -Value $env:TERRAFORM_TFVARS_JSON
           ./scripts/start-deploy.ps1 -Environment staging -SourceZip "$env:RUNNER_TEMP/bundle.zip" -ExpectedSha256 $env:SOURCE_SHA256 -ReleaseManifest "$env:RUNNER_TEMP/release-manifest.json" -ExpectedManifestSha256 $env:MANIFEST_SHA256 -Bucket $env:ARTIFACT_BUCKET -SourcePrefix $env:SOURCE_PREFIX -ProjectName $env:CODEBUILD_PROJECT -DeployerImageDigest $env:DEPLOYER_IMAGE_DIGEST -SourceCommit $env:GITHUB_SHA -CloudWindowEvidenceFile $evidence -TerraformVariablesFile $tfvars -StateBucket $env:STATE_BUCKET -ResultOutputFile "$env:RUNNER_TEMP/staging-deployment-result.json"
+
+  production-contract:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.FUNCTIONS_PRODUCTION_DEPLOYMENT_ENABLED == 'true'
+    environment:
+      name: production
+    needs: verify
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout reviewed source
+        uses: actions/checkout@v4
+
+      - name: Require reviewed input artifact identity
+        shell: pwsh
+        env:
+          FUNCTIONS_PRODUCTION_INPUTS_RUN_ID: ${{ vars.FUNCTIONS_PRODUCTION_INPUTS_RUN_ID }}
+          FUNCTIONS_PRODUCTION_INPUTS_ARTIFACT_ID: ${{ vars.FUNCTIONS_PRODUCTION_INPUTS_ARTIFACT_ID }}
+        run: |
+          foreach ($value in @($env:FUNCTIONS_PRODUCTION_INPUTS_RUN_ID, $env:FUNCTIONS_PRODUCTION_INPUTS_ARTIFACT_ID)) {
+            if ($value -cnotmatch '\A[1-9][0-9]*\z') { throw 'Reviewed production input artifact identity is required.' }
+          }
+
+      - name: Download reviewed public input artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ vars.FUNCTIONS_PRODUCTION_INPUTS_RUN_ID }}
+          artifact-ids: ${{ vars.FUNCTIONS_PRODUCTION_INPUTS_ARTIFACT_ID }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/functions-production-review
+
+      - name: Validate production promotion without cloud credentials
+        shell: pwsh
+        env:
+          FUNCTIONS_PRODUCTION_DEPLOYMENT_ENABLED: ${{ vars.FUNCTIONS_PRODUCTION_DEPLOYMENT_ENABLED }}
+          FUNCTIONS_PRODUCTION_LAUNCHER_ENABLED: ${{ vars.FUNCTIONS_PRODUCTION_LAUNCHER_ENABLED }}
+          FUNCTIONS_PRODUCTION_ROLE_ARN: ${{ vars.FUNCTIONS_PRODUCTION_ROLE_ARN }}
+          FUNCTIONS_PRODUCTION_INPUTS_SHA256: ${{ vars.FUNCTIONS_PRODUCTION_INPUTS_SHA256 }}
+        run: |
+          & ./scripts/check-production-promotion.ps1 `
+            -Enabled $env:FUNCTIONS_PRODUCTION_DEPLOYMENT_ENABLED `
+            -LauncherEnabled $env:FUNCTIONS_PRODUCTION_LAUNCHER_ENABLED `
+            -RoleArn $env:FUNCTIONS_PRODUCTION_ROLE_ARN `
+            -InputsFile (Join-Path $env:RUNNER_TEMP 'functions-production-review/production-inputs.json') `
+            -ExpectedInputsSha256 $env:FUNCTIONS_PRODUCTION_INPUTS_SHA256 `
+            -SourceCommit $env:GITHUB_SHA `
+            -EventName $env:GITHUB_EVENT_NAME `
+            -BranchRef $env:GITHUB_REF
+          # Contract validation is not deployment. The production runtime
+          # adapter remains disabled pending a separately reviewed change.
