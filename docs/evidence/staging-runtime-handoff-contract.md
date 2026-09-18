@@ -177,4 +177,4 @@ executor wiring reviews are complete.
 
 ## Fresh staging replay request
 
-This documentation-only change requests a fresh push-triggered staging replay after refreshing the environment-scoped CLOUD_WINDOW_EVIDENCE_JSON. It records no deployment result.
+This documentation-only change requests a fresh push-triggered staging replay after the IAM permission fix and refresh of the environment-scoped CLOUD_WINDOW_EVIDENCE_JSON. It records no deployment result.
