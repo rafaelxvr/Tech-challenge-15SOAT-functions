@@ -194,12 +194,14 @@ This replay verifies generated event-source mapping metadata reads after the IAM
 ## Replay request 2026-09-18 (IAM metadata resource correction)
 
 The staging replay is requested after the executor policy was corrected to allow the Lambda event-mapping metadata read APIs against the AWS-evaluated wildcard resource. The live managed policy is version v6; the corresponding infrastructure contract is tracked in K8S PR #24. This commit exists only to trigger the reviewed staging rehearsal; replace this request entry with the immutable runtime receipt after the run completes.
-
-
 ## Staging runtime receipt 2026-09-18
 
 - GitHub workflow: https://github.com/rafaelxvr/Tech-challenge-15SOAT-functions/actions/runs/35304367076
-- Source commit: ebee9db63f8f2c494e5f446fb91150fdbfbf7c7`n- CodeBuild project: oficina-phase3-oficina-functions-staging-deploy`n- Artifact bucket: oficina-phase3-artifacts-16225b7358`n- Artifact SHA-256: 15506003700cb094da6d91c358d6f5cec8ca37580d6f4dd270df9cce4f82ca34`n- Release manifest SHA-256: 8c79f6c09124197a8d2254a505cd07fe8ac22b33cf8f9a55f32f37a4c6fab13c`n- Result: verification and private staging deployment completed successfully at 2026-09-18T03:48:40Z.
+- Source commit: `bebee9db63f8f2c494e5f446fb91150fdbfbf7c7`
+- CodeBuild project: `oficina-phase3-oficina-functions-staging-deploy`
+- Artifact bucket: `oficina-phase3-artifacts-16225b7358`
+- Artifact SHA-256: `15506003700cb094da6d91c358d6f5cec8ca37580d6f4dd270df9cce4f82ca34`
+- Release manifest SHA-256: `8c79f6c09124197a8d2254a505cd07fe8ac22b33cf8f9a55f32f37a4c6fab13c`
+- Result: verification and private staging deployment completed successfully at 2026-09-18T03:48:40Z.
 
 The workflow log is the immutable receipt for the private executor result; no production deployment was requested.
-
