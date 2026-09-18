@@ -123,4 +123,3 @@ if ($LauncherEnabled -cnotin @('','false')) {
     throw 'FUNCTIONS_PRODUCTION_LAUNCHER_NOT_IMPLEMENTED: a separate reviewed production adapter is required.'
 }
 Write-Output 'PRODUCTION_CONTRACT_VALIDATED_DEPLOYMENT_DISABLED'
-
