@@ -27,6 +27,12 @@ After the shared K8S executor buildspec is refreshed, the next staging
 invocation is a replay of the reviewed FUN handoff. This is a planned trigger
 for fresh runtime evidence and does not claim that the replay has succeeded.
 
+## Fresh staging replay request (2026-09-17)
+
+Following reconciliation of the staging IAM ownership and permissions, a fresh
+staging replay is being requested. This records a pending request only: it
+contains no execution result or success claim and adds no secret values.
+
 ## Live handoff inputs
 
 ```text
