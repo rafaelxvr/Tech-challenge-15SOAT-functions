@@ -18,3 +18,5 @@ Run `./mvnw.cmd -B verify` (Linux: `./mvnw -B verify`) and `pwsh -File tests/ver
 I5 runtime roots now exist in this repository, but [single-owner state transfer](docs/runtime-permissions.md) from overlapping K8S definitions is required before activation. [I7 cloud adapters remain disabled](docs/i7-pipeline-contracts.md). This source guide records no live endpoint, deployment or SES delivery result. Documentation is checked from the APP checkout with `python scripts/check-doc-links.py docs README.md` across all four sibling repositories.
 
 The next staging invocation is a replay after the shared K8S executor buildspec refresh. This note records the planned trigger only; it is not evidence of a successful deployment.
+
+Production automation is a main-only, explicitly gated [promotion review contract](docs/production-promotion-contract.md). It requires reviewed production inputs and a same-commit successful staging receipt, and remains deployment-disabled. The existing staging workflow is unchanged.

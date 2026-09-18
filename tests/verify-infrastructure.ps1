@@ -5,6 +5,7 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 & "$PSScriptRoot/source-package-contract.ps1"
 & "$PSScriptRoot/workflow-context-contract.ps1"
+& "$PSScriptRoot/production-promotion-contract.ps1"
 & "$PSScriptRoot/cloud-window-tests.ps1"
 & "$PSScriptRoot/release-guards-contract.ps1"
 & "$PSScriptRoot/pipeline-contract.ps1"
