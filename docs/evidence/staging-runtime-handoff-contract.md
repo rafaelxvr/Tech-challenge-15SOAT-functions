@@ -178,3 +178,6 @@ executor wiring reviews are complete.
 ## Fresh staging replay request
 
 This documentation-only change requests a fresh push-triggered staging replay after refreshing the environment-scoped CLOUD_WINDOW_EVIDENCE_JSON. It records no deployment result.
+
+Replay trigger remains documentation-only; runtime success will be recorded only from the next staging executor receipt.
+
