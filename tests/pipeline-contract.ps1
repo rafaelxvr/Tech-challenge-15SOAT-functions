@@ -10,6 +10,8 @@ function Save($value, $path) { $value | ConvertTo-Json -Depth 10 | Set-Content -
 function Reject([scriptblock]$action, $message) { try { & $action | Out-Null } catch { return }; throw "Expected rejection: $message" }
 function aws { throw 'Offline contract forbids AWS calls.' }
 try {
+    $launcherSource = Get-Content "$repo/scripts/start-deploy.ps1" -Raw
+    if (-not $launcherSource.Contains('$sourceKey = "$SourcePrefix/bundle.zip"') -or $launcherSource.Contains('$SourcePrefix/artifacts/$SourceCommit.zip')) { throw 'Launcher source key must match the fixed CodeBuild bundle location.' }
     $bundle = Join-Path $temp 'bundle.zip'; 'immutable fixture' | Set-Content -LiteralPath $bundle -NoNewline
     $tfvars = Join-Path $temp 'functions_staging.tfvars.json'; '{"environment":"staging"}' | Set-Content -LiteralPath $tfvars -NoNewline
     $trustedTfvars = '/tmp/oficina/functions_staging.tfvars.json'

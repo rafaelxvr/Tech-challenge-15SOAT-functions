@@ -41,7 +41,7 @@ if ([string](Require $manifest 'contractVersion') -cne 'phase3-v2' -or [string]:
 & (Join-Path $PSScriptRoot 'check-workflow-context.ps1') -Environment staging -EventName $EventName -BranchRef $BranchRef | Out-Null
 & (Join-Path $PSScriptRoot 'check-cloud-window.ps1') -EvidenceFile $CloudWindowEvidenceFile -Environment staging | Out-Null
 if ($DryRun) { Write-Result 'DRY_RUN_VALIDATED'; Write-Output 'Deployment launch request validated; dry run did not call AWS.'; exit 0 }
-$sourceKey = "$SourcePrefix/artifacts/$SourceCommit.zip"
+$sourceKey = "$SourcePrefix/bundle.zip"
 $manifestKey = "$SourcePrefix/manifests/$SourceCommit.json"
 $tfvarsKey = "$SourcePrefix/config/$SourceCommit.tfvars.json"
 $sourceResult = & aws s3api put-object --bucket $Bucket --key $sourceKey --body $SourceZip --metadata "sha256=$ExpectedSha256" --output json 2>$null
